@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Play, Pause, Trash2, Clock, Send, Settings } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Clock, Send, Settings, Square } from 'lucide-react';
 import {
   createSound,
   deleteSound,
@@ -99,6 +99,26 @@ export function AudioSystem() {
       setSounds([]);
     }
   }, [currentlyPlaying, startPlayback]);
+
+  const stopPlayback = useCallback(
+    async (soundId: string) => {
+      const audioEl = audioRef.current;
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
+
+      setCurrentlyPlaying(null);
+
+      await updateSound(soundId, {
+        is_playing: false,
+        next_play_at: new Date().toISOString(),
+      });
+
+      await loadSounds();
+    },
+    [loadSounds]
+  );
 
   const handlePlaybackEnd = useCallback(async () => {
     if (!currentlyPlaying) return;
@@ -340,6 +360,25 @@ export function AudioSystem() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {isReady && !sound.is_playing && (
+                            <button
+                              onClick={() => startPlayback(sound.id)}
+                              className="p-2 hover:bg-slate-800 rounded-lg text-emerald-300 hover:text-emerald-200 transition"
+                              title="הפעל השמעה"
+                              disabled={!!currentlyPlaying}
+                            >
+                              <Play className="w-5 h-5" />
+                            </button>
+                          )}
+                          {sound.is_playing && (
+                            <button
+                              onClick={() => stopPlayback(sound.id)}
+                              className="p-2 hover:bg-slate-800 rounded-lg text-red-300 hover:text-red-200 transition"
+                              title="עצור השמעה"
+                            >
+                              <Square className="w-5 h-5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => setSelectedSoundForSettings(
                               isExpanded ? null : sound.id
