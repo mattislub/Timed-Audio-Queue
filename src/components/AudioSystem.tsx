@@ -20,7 +20,17 @@ export function AudioSystem() {
   const [showSharePage, setShowSharePage] = useState(false);
   const [playbackSpeeds, setPlaybackSpeeds] = useState<Record<string, string[]>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  const addDebugLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const formatted = `${timestamp} – ${message}`;
+
+    setDebugLogs(prev => [formatted, ...prev].slice(0, 100));
+    console.log(`[AudioSystem] ${formatted}`);
+  }, []);
 
   const getMimeFromUrl = useCallback((url: string) => {
     const extension = url.split('.').pop()?.split('?')[0]?.toLowerCase();
@@ -106,6 +116,7 @@ export function AudioSystem() {
 
     if (!sound.file_url) {
       setLoadError('קובץ השמע לא נמצא. נסו להעלות מחדש.');
+      addDebugLog(`הפעלה נכשלה: חסר קובץ שמע עבור ${sound.file_name}`);
       return;
     }
 
@@ -114,6 +125,7 @@ export function AudioSystem() {
 
     if (!isSourceSupported(audioEl, sound.file_url)) {
       setLoadError('פורמט הקובץ אינו נתמך על ידי הדפדפן. נסו להעלות קובץ אחר.');
+      addDebugLog(`הפעלה נכשלה: פורמט לא נתמך (${sound.file_url})`);
       await updateSound(soundId, {
         is_playing: false,
         next_play_at: new Date(Date.now() + 30 * 1000).toISOString(),
@@ -124,6 +136,7 @@ export function AudioSystem() {
     const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
     const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
 
+    addDebugLog(`מנסה להפעיל ${sound.file_name} (${sound.id}) במהירות ${currentSpeed}x`);
     setCurrentlyPlaying(soundId);
     await updateSound(soundId, { is_playing: true });
 
@@ -135,8 +148,10 @@ export function AudioSystem() {
       await waitForAudioReady(audioEl);
       await audioEl.play();
       setLoadError(null);
+      addDebugLog(`ההשמעה התחילה בהצלחה עבור ${sound.file_name}`);
     } catch (error) {
       console.error('Playback error:', error);
+      addDebugLog(`שגיאת הפעלה עבור ${sound.file_name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoadError('הקובץ לא ניתן להשמעה. בדקו את פורמט הקובץ או נסו להעלות מחדש.');
       setCurrentlyPlaying(null);
       audioEl.pause();
@@ -147,13 +162,15 @@ export function AudioSystem() {
         next_play_at: new Date(Date.now() + 30 * 1000).toISOString(),
       });
     }
-  }, [isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
+  }, [addDebugLog, isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
 
   const loadSounds = useCallback(async () => {
     try {
+      addDebugLog('טוען רשימת קבצי שמע מהשרת');
       const data = await fetchSounds();
       setLoadError(null);
       setSounds(data);
+      addDebugLog(`הטענה הצליחה: נמצאו ${data.length} קבצי שמע`);
       const speeds: Record<string, string[]> = {};
       data.forEach(sound => {
         speeds[sound.id] = sound.playback_speeds || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
@@ -173,10 +190,11 @@ export function AudioSystem() {
       }
     } catch (error) {
       console.error('Failed to load sounds', error);
+      addDebugLog(`טעינת קבצים נכשלה: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoadError(error instanceof Error ? error.message : 'Unable to load sounds.');
       setSounds([]);
     }
-  }, [currentlyPlaying, startPlayback]);
+  }, [addDebugLog, currentlyPlaying, startPlayback]);
 
   const stopPlayback = useCallback(
     async (soundId: string) => {
@@ -187,6 +205,7 @@ export function AudioSystem() {
       }
 
       setCurrentlyPlaying(null);
+      addDebugLog(`עצירת השמעה יזומה עבור ${soundId}`);
 
       await updateSound(soundId, {
         is_playing: false,
@@ -195,14 +214,17 @@ export function AudioSystem() {
 
       await loadSounds();
     },
-    [loadSounds]
+    [addDebugLog, loadSounds]
   );
 
   const handlePlaybackEnd = useCallback(async () => {
     if (!currentlyPlaying) return;
 
     const sound = sounds.find(s => s.id === currentlyPlaying);
-    if (!sound) return;
+    if (!sound) {
+      addDebugLog(`סיום השמעה עבור מזהה לא ידוע: ${currentlyPlaying}`);
+      return;
+    }
 
     const newPlaysCompleted = sound.plays_completed + 1;
     const hasMorePlays = newPlaysCompleted < sound.total_plays;
@@ -214,16 +236,18 @@ export function AudioSystem() {
         is_playing: false,
         next_play_at: nextPlayTime.toISOString(),
       });
+      addDebugLog(`ההשמעה הסתיימה (${sound.file_name}). תוזמנה השמעה נוספת בעוד 30 שניות`);
     } else {
       await updateSound(currentlyPlaying, {
         plays_completed: newPlaysCompleted,
         is_playing: false,
       });
+      addDebugLog(`ההשמעה הסתיימה (${sound.file_name}). הושלמו כל ההשמעות`);
     }
 
     setCurrentlyPlaying(null);
     await loadSounds();
-  }, [currentlyPlaying, loadSounds, sounds]);
+  }, [addDebugLog, currentlyPlaying, loadSounds, sounds]);
 
   useEffect(() => {
     loadSounds();
@@ -245,11 +269,35 @@ export function AudioSystem() {
     return () => clearInterval(interval);
   }, [updateCountdownTimers]);
 
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const handleAudioError = () => {
+      const { error } = audioEl;
+      const htmlMediaErrorMessages: Record<number, string> = {
+        1: 'המשתמש ביטל את ההשמעה',
+        2: 'שגיאת רשת בזמן הטעינה',
+        3: 'קידוד קובץ לא נתמך',
+        4: 'לא ניתן לטעון מקור שמע',
+      };
+
+      const message = error
+        ? `קוד שגיאה ${error.code}: ${htmlMediaErrorMessages[error.code] || 'לא ידוע'}`
+        : 'שגיאת שמע לא מזוהה';
+      addDebugLog(`אירעה שגיאה בנגן: ${message}`);
+    };
+
+    audioEl.addEventListener('error', handleAudioError);
+    return () => audioEl.removeEventListener('error', handleAudioError);
+  }, [addDebugLog]);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
+    addDebugLog(`העלאת קובץ חדשה התחילה: ${file.name}`);
 
     try {
       const fileName = `${Date.now()}-${file.name}`;
@@ -266,8 +314,10 @@ export function AudioSystem() {
       });
 
       await loadSounds();
+      addDebugLog(`העלאה הסתיימה בהצלחה: ${file.name}`);
     } catch (error) {
       alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      addDebugLog(`העלאה נכשלה עבור ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
     setIsUploading(false);
@@ -295,8 +345,10 @@ export function AudioSystem() {
         const { [id]: _deletedCountdown, ...rest } = prev;
         return rest;
       });
+      addDebugLog(`הקובץ נמחק: ${sound?.file_name ?? id}`);
     } catch (error) {
       alert('Error deleting sound: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      addDebugLog(`מחיקה נכשלה עבור ${sound?.file_name ?? id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -306,11 +358,13 @@ export function AudioSystem() {
     setPlaybackSpeeds({ ...playbackSpeeds, [soundId]: newSpeeds });
 
     await updateSound(soundId, { playback_speeds: newSpeeds });
+    addDebugLog(`עודכנה מהירות השמעה ${playIndex + 1} עבור ${soundId} ל-${speed}x`);
   };
 
   const handleRecordingUpload = (file: File, fileName: string) => {
     (async () => {
       setIsUploading(true);
+      addDebugLog(`העלאת הקלטה התחילה: ${file.name}`);
       try {
         const uploadResult = await uploadSoundFile(file, fileName);
 
@@ -325,8 +379,10 @@ export function AudioSystem() {
         });
 
         await loadSounds();
+        addDebugLog(`הקלטה הועלתה בהצלחה: ${file.name}`);
       } catch (error) {
         alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        addDebugLog(`העלאת הקלטה נכשלה עבור ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
       setIsUploading(false);
@@ -375,6 +431,13 @@ export function AudioSystem() {
           >
             <Send className="w-4 h-4" />
             שיתוף משתמשים
+          </button>
+          <button
+            onClick={() => setShowDebugPanel(prev => !prev)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-800 bg-slate-900/60 hover:border-emerald-500 text-sm rounded-lg transition"
+          >
+            לוג מערכת
+            <span className="text-xs text-emerald-300">{showDebugPanel ? 'מוסתר' : 'גלוי'}</span>
           </button>
           <div className="flex items-center gap-3 px-4 py-2 rounded-lg border border-slate-800 bg-slate-900/60">
             <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -530,6 +593,30 @@ export function AudioSystem() {
           <div className="bg-slate-900/70 rounded-2xl border border-slate-800 p-6 shadow-lg sticky top-24">
             <Recorder onUpload={handleRecordingUpload} isUploading={isUploading} />
           </div>
+          {showDebugPanel && (
+            <div className="bg-slate-900/70 rounded-2xl border border-emerald-800 p-4 shadow-lg mt-6 space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-emerald-200 font-semibold">לוג מערכת</h3>
+                <button
+                  onClick={() => setDebugLogs([])}
+                  className="text-xs text-slate-300 hover:text-white transition"
+                >
+                  נקה
+                </button>
+              </div>
+              {debugLogs.length === 0 ? (
+                <p className="text-slate-400">אין נתוני לוג להצגה.</p>
+              ) : (
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  {debugLogs.map((log, index) => (
+                    <div key={index} className="bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-emerald-100">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
