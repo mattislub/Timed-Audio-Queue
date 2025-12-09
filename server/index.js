@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import mysql from 'mysql2/promise';
 import multer from 'multer';
@@ -21,6 +22,13 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   dateStrings: true,
+});
+
+console.log('DB ENV CONFIG:', {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  hasPassword: !!process.env.DB_PASSWORD,
+  dbName: process.env.DB_NAME,
 });
 
 const app = express();
