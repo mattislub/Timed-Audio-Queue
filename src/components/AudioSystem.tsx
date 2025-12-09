@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Play, Pause, Trash2, Clock, Send, Settings, Square } from 'lucide-react';
+import { Upload, Play, Trash2, Clock, Send, Settings, Square } from 'lucide-react';
 import {
   createSound,
   deleteSound,
@@ -197,9 +197,26 @@ export function AudioSystem() {
   };
 
   const deleteSoundItem = async (id: string) => {
+    const sound = sounds.find(item => item.id === id);
+    const confirmationMessage =
+      `למחוק את "${sound?.file_name ?? 'ההקלטה'}"? הפעולה תמחק את כל נתוני ההשמעה שלה.`;
+
+    if (!window.confirm(confirmationMessage)) return;
+
     try {
+      if (currentlyPlaying === id && audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setCurrentlyPlaying(null);
+      }
+
       await deleteSound(id);
-      await loadSounds();
+      setSounds(prev => prev.filter(soundItem => soundItem.id !== id));
+      setSelectedSoundForSettings(prev => (prev === id ? null : prev));
+      setTimeUntilNextPlay(prev => {
+        const { [id]: _deletedCountdown, ...rest } = prev;
+        return rest;
+      });
     } catch (error) {
       alert('Error deleting sound: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
@@ -388,18 +405,13 @@ export function AudioSystem() {
                           >
                             <Settings className="w-5 h-5" />
                           </button>
-                          {sound.plays_completed >= sound.total_plays ? (
-                            <button
-                              onClick={() => deleteSoundItem(sound.id)}
-                              className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-red-400 transition"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          ) : (
-                            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800/80">
-                              <Pause className="w-5 h-5 text-slate-400" />
-                            </div>
-                          )}
+                          <button
+                            onClick={() => deleteSoundItem(sound.id)}
+                            className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-red-400 transition"
+                            title="מחק הקלטה"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         </div>
                       </div>
 
