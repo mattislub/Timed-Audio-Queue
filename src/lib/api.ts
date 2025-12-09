@@ -18,7 +18,7 @@ export type SoundShare = {
   created_at: string;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.sr.70-60.com/api';
+const API_BASE_URL = 'https://api.sr.70-60.com/api';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
