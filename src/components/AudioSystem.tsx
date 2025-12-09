@@ -22,6 +22,39 @@ export function AudioSystem() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const waitForAudioReady = useCallback(async (audioEl: HTMLAudioElement) => {
+    await new Promise<void>((resolve, reject) => {
+      let timeoutId: number | undefined;
+
+      const onCanPlay = () => {
+        cleanup();
+        resolve();
+      };
+
+      const onError = () => {
+        cleanup();
+        reject(new Error('הקובץ לא נתמך או לא נטען בהצלחה.'));
+      };
+
+      const cleanup = () => {
+        audioEl.removeEventListener('canplaythrough', onCanPlay);
+        audioEl.removeEventListener('error', onError);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      audioEl.addEventListener('canplaythrough', onCanPlay, { once: true });
+      audioEl.addEventListener('error', onError, { once: true });
+
+      audioEl.load();
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('הטענת הקובץ חרגה מהזמן המותר.'));
+      }, 7000);
+    });
+  }, []);
+
   const updateCountdownTimers = useCallback(() => {
     const now = new Date().getTime();
     const newCountdowns: Record<string, number> = {};
@@ -58,9 +91,9 @@ export function AudioSystem() {
     try {
       audioEl.pause();
       audioEl.currentTime = 0;
-      audioEl.src = sound.file_url;
+      audioEl.src = encodeURI(sound.file_url);
       audioEl.playbackRate = currentSpeed;
-      audioEl.load();
+      await waitForAudioReady(audioEl);
       await audioEl.play();
       setLoadError(null);
     } catch (error) {
@@ -69,7 +102,7 @@ export function AudioSystem() {
       setCurrentlyPlaying(null);
       await updateSound(soundId, { is_playing: false });
     }
-  }, [playbackSpeeds, sounds]);
+  }, [playbackSpeeds, sounds, waitForAudioReady]);
 
   const loadSounds = useCallback(async () => {
     try {
