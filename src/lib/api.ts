@@ -19,6 +19,16 @@ export type SoundShare = {
 };
 
 const API_BASE_URL = 'https://api.sr.70-60.com/api/sounds';
+const API_BASE_ORIGIN = new URL(API_BASE_URL).origin;
+
+function withApiDomain(publicUrl: string): string {
+  if (publicUrl.startsWith('http://') || publicUrl.startsWith('https://')) {
+    return publicUrl;
+  }
+
+  const normalizedPath = publicUrl.startsWith('/') ? publicUrl : `/${publicUrl}`;
+  return `${API_BASE_ORIGIN}${normalizedPath}`;
+}
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -62,10 +72,12 @@ export async function uploadSoundFile(file: File, fileName: string): Promise<{ p
   formData.append('file', file);
   formData.append('fileName', fileName);
 
-  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload`, {
+  const response = await performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload`, {
     method: 'POST',
     body: formData,
   });
+
+  return { publicUrl: withApiDomain(response.publicUrl) };
 }
 
 export async function createSound(payload: Partial<Sound>): Promise<void> {
@@ -113,9 +125,11 @@ export async function uploadBase64Audio(
   base64Content: string,
   duration?: number
 ): Promise<{ publicUrl: string }> {
-  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload/base64`, {
+  const response = await performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload/base64`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, fileContent: base64Content, duration }),
   });
+
+  return { publicUrl: withApiDomain(response.publicUrl) };
 }
