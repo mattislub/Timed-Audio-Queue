@@ -89,7 +89,16 @@ app.use(
 );
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(uploadsDir));
+app.use(
+  '/uploads',
+  express.static(uploadsDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.webm')) {
+        res.type('audio/webm');
+      }
+    },
+  }),
+);
 
 function parsePlaybackSpeeds(rawValue) {
   if (rawValue === null || rawValue === undefined) return undefined;
