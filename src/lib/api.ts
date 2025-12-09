@@ -25,7 +25,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const message = await response.text();
     throw new Error(message || 'Unexpected server response');
   }
-  return response.json() as Promise<T>;
+
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.includes('application/json')) {
+    await response.text();
+    return undefined as T;
+  }
+
+  const bodyText = await response.text();
+  if (!bodyText.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(bodyText) as T;
 }
 
 async function performRequest<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
