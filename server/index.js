@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
 import mysql from 'mysql2/promise';
 import multer from 'multer';
 import path from 'node:path';
@@ -34,6 +35,11 @@ console.log('DB ENV CONFIG:', {
 const app = express();
 const port = process.env.PORT || 3701;
 
+app.use(
+  cors({
+    origin: 'https://sr.70-60.com',
+  }),
+);
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadsDir));
