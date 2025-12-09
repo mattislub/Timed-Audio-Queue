@@ -41,17 +41,33 @@ export function AudioSystem() {
     const sound = sounds.find(s => s.id === soundId);
     if (!sound || sound.is_playing || sound.plays_completed >= sound.total_plays) return;
 
-    setCurrentlyPlaying(soundId);
+    if (!sound.file_url) {
+      setLoadError('קובץ השמע לא נמצא. נסו להעלות מחדש.');
+      return;
+    }
 
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
+    const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
+
+    setCurrentlyPlaying(soundId);
     await updateSound(soundId, { is_playing: true });
 
-    if (audioRef.current) {
-      const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
-      const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
-
-      audioRef.current.src = sound.file_url;
-      audioRef.current.playbackRate = currentSpeed;
-      audioRef.current.play().catch(err => console.error('Playback error:', err));
+    try {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+      audioEl.src = sound.file_url;
+      audioEl.playbackRate = currentSpeed;
+      audioEl.load();
+      await audioEl.play();
+      setLoadError(null);
+    } catch (error) {
+      console.error('Playback error:', error);
+      setLoadError('הקובץ לא ניתן להשמעה. בדקו את פורמט הקובץ או נסו להעלות מחדש.');
+      setCurrentlyPlaying(null);
+      await updateSound(soundId, { is_playing: false });
     }
   }, [playbackSpeeds, sounds]);
 
