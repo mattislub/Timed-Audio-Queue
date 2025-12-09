@@ -102,6 +102,9 @@ Provision a MySQL database on your server and back it with a small REST API. The
 - `POST /api/sounds/upload` for multipart audio uploads and `POST /api/sounds/upload/base64` for base64 payloads
 - `GET /api/sound-shares` / `POST /api/sound-shares` / `DELETE /api/sound-shares/:id`
 
+`POST /api/sounds` also accepts a `file_content` base64 payload alongside `file_name` and will write the decoded audio into the
+server's `/uploads` directory, storing only the public URL in MySQL rather than the encoded audio blob.
+
 Suggested MySQL tables:
 - `sounds` – `id` (UUID/PK), `file_name`, `file_url`, `plays_completed`, `total_plays`, `is_playing`, `next_play_at`, `created_at`, optional `playback_speeds` JSON/text, optional `duration`
 - `sound_shares` – `id` (UUID/PK), `sound_id` (FK), `user_email`, `created_at`
