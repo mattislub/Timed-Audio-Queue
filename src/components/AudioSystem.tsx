@@ -51,6 +51,25 @@ export function AudioSystem() {
     }
   }, []);
 
+  const getSecureAudioUrl = useCallback(
+    (url: string) => {
+      try {
+        const parsed = new URL(url, window.location.href);
+
+        if (parsed.protocol === 'http:') {
+          parsed.protocol = 'https:';
+          addDebugLog(`שודרג מקור שמע ל-HTTPS עבור ${parsed.pathname}`);
+        }
+
+        return parsed.toString();
+      } catch (error) {
+        console.warn('Failed to normalize audio URL', error);
+        return url.startsWith('http:') ? url.replace(/^http:/, 'https:') : url;
+      }
+    },
+    [addDebugLog],
+  );
+
   const isSourceSupported = useCallback(
     (audioEl: HTMLAudioElement, url: string) => {
       const mime = getMimeFromUrl(url);
@@ -143,7 +162,8 @@ export function AudioSystem() {
     try {
       audioEl.pause();
       audioEl.currentTime = 0;
-      audioEl.src = encodeURI(sound.file_url);
+      const playbackUrl = getSecureAudioUrl(sound.file_url);
+      audioEl.src = encodeURI(playbackUrl);
       audioEl.playbackRate = currentSpeed;
       await waitForAudioReady(audioEl);
       await audioEl.play();
@@ -162,7 +182,7 @@ export function AudioSystem() {
         next_play_at: new Date(Date.now() + 30 * 1000).toISOString(),
       });
     }
-  }, [addDebugLog, isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
+  }, [addDebugLog, getSecureAudioUrl, isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
 
   const loadSounds = useCallback(async () => {
     try {

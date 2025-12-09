@@ -19,8 +19,19 @@ function sanitizeFileName(fileName) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function getRequestProtocol(req) {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+
+  if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+    return forwardedProto.split(',')[0].trim();
+  }
+
+  return req.protocol;
+}
+
 function buildPublicUrl(req, fileName) {
-  return `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+  const protocol = getRequestProtocol(req) || 'https';
+  return `${protocol}://${req.get('host')}/uploads/${fileName}`;
 }
 
 async function saveBase64File(req, fileName, base64Content) {
