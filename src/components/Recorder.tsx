@@ -13,26 +13,36 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const recordingFileNameRef = useRef<string>('');
+  const recordingMimeTypeRef = useRef<string>('');
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = MediaRecorder.isTypeSupported('audio/mpeg')
+        ? 'audio/mpeg'
+        : 'audio/webm';
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
-      recordingFileNameRef.current = `recording-${Date.now()}.webm`;
+      recordingMimeTypeRef.current = mimeType;
+      const extension = mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
+      recordingFileNameRef.current = `recording-${Date.now()}.${extension}`;
 
       mediaRecorder.ondataavailable = (e) => {
         chunksRef.current.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: recordingMimeTypeRef.current || 'audio/webm' });
         setRecordedBlob(blob);
-        const fileName = recordingFileNameRef.current || `recording-${Date.now()}.webm`;
-        const file = new File([blob], fileName, { type: 'audio/webm' });
+        const fallbackExtension = recordingMimeTypeRef.current === 'audio/mpeg' ? 'mp3' : 'webm';
+        const fileName =
+          recordingFileNameRef.current || `recording-${Date.now()}.${fallbackExtension}`;
+        const file = new File([blob], fileName, { type: recordingMimeTypeRef.current || 'audio/webm' });
         onUpload(file, fileName);
         recordingFileNameRef.current = '';
+        recordingMimeTypeRef.current = '';
       };
 
       mediaRecorder.start();
