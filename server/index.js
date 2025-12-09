@@ -35,6 +35,23 @@ console.log('DB ENV CONFIG:', {
 const app = express();
 const port = process.env.PORT || 3701;
 
+function toMySqlDateTime(value) {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const pad = (num) => String(num).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 app.use(
   cors({
     origin: 'https://sr.70-60.com',
@@ -95,12 +112,17 @@ app.post('/api/sounds', async (req, res) => {
     return res.status(400).send('file_name and file_url are required');
   }
 
+  const nextPlayAtValue = toMySqlDateTime(next_play_at ?? new Date());
+  if (!nextPlayAtValue) {
+    return res.status(400).send('Invalid next_play_at timestamp');
+  }
+
   try {
     const playbackSpeedsJson = playback_speeds ? JSON.stringify(playback_speeds) : null;
     await pool.query(
       `INSERT INTO sounds (id, file_name, file_url, plays_completed, total_plays, is_playing, next_play_at, playback_speeds, duration)
        VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [file_name, file_url, plays_completed, total_plays, is_playing ? 1 : 0, next_play_at, playbackSpeedsJson, duration],
+      [file_name, file_url, plays_completed, total_plays, is_playing ? 1 : 0, nextPlayAtValue, playbackSpeedsJson, duration],
     );
     res.status(201).send('Created');
   } catch (error) {
@@ -118,10 +140,22 @@ app.patch('/api/sounds/:id', async (req, res) => {
     return res.status(400).send('No valid fields provided for update');
   }
 
+  for (const [key, value] of entries) {
+    if (key === 'next_play_at') {
+      const formatted = toMySqlDateTime(value);
+      if (!formatted) {
+        return res.status(400).send('Invalid next_play_at timestamp');
+      }
+    }
+  }
+
   const updates = entries.map(([key]) => `${key} = ?`).join(', ');
   const values = entries.map(([key, value]) => {
     if (keyNeedsJsonStringify(key)) {
       return JSON.stringify(value);
+    }
+    if (key === 'next_play_at') {
+      return toMySqlDateTime(value);
     }
     if (keyNeedsBooleanNormalization(key)) {
       return value ? 1 : 0;
