@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://api.sr.70-60.com/api';
+const API_BASE_URL = 'https://api.sr.70-60.com/api/sounds';
 
 export type RemoteSound = {
   id: string;
@@ -18,12 +18,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function fetchRemoteSounds(): Promise<RemoteSound[]> {
-  const response = await fetch(`${API_BASE_URL}/sounds`);
+  const response = await fetch(API_BASE_URL);
   return handleResponse<RemoteSound[]>(response);
 }
 
 export async function deleteRemoteSound(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sounds/${id}`, { method: 'DELETE' });
+  const response = await fetch(`${API_BASE_URL}/${id}`, { method: 'DELETE' });
   await handleResponse(response);
 }
 
@@ -32,7 +32,7 @@ export async function uploadBase64Recording(
   fileContent: string,
   duration?: number
 ): Promise<{ publicUrl: string }> {
-  const response = await fetch(`${API_BASE_URL}/sounds/upload/base64`, {
+  const response = await fetch(`${API_BASE_URL}/upload/base64`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName: filename, fileContent, duration }),
@@ -42,7 +42,7 @@ export async function uploadBase64Recording(
 }
 
 export async function createRemoteSound(payload: Partial<RemoteSound>): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sounds`, {
+  const response = await fetch(API_BASE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

@@ -18,7 +18,7 @@ export type SoundShare = {
   created_at: string;
 };
 
-const API_BASE_URL = 'https://api.sr.70-60.com/api';
+const API_BASE_URL = 'https://api.sr.70-60.com/api/sounds';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -41,7 +41,7 @@ async function performRequest<T>(input: RequestInfo | URL, init?: RequestInit): 
 }
 
 export async function fetchSounds(): Promise<Sound[]> {
-  return performRequest<Sound[]>(`${API_BASE_URL}/sounds`);
+  return performRequest<Sound[]>(API_BASE_URL);
 }
 
 export async function uploadSoundFile(file: File, fileName: string): Promise<{ publicUrl: string }> {
@@ -49,14 +49,14 @@ export async function uploadSoundFile(file: File, fileName: string): Promise<{ p
   formData.append('file', file);
   formData.append('fileName', fileName);
 
-  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/sounds/upload`, {
+  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload`, {
     method: 'POST',
     body: formData,
   });
 }
 
 export async function createSound(payload: Partial<Sound>): Promise<void> {
-  await performRequest<void>(`${API_BASE_URL}/sounds`, {
+  await performRequest<void>(API_BASE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -64,7 +64,7 @@ export async function createSound(payload: Partial<Sound>): Promise<void> {
 }
 
 export async function updateSound(id: string, payload: Partial<Sound>): Promise<void> {
-  await performRequest<void>(`${API_BASE_URL}/sounds/${id}`, {
+  await performRequest<void>(`${API_BASE_URL}/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -72,7 +72,7 @@ export async function updateSound(id: string, payload: Partial<Sound>): Promise<
 }
 
 export async function deleteSound(id: string): Promise<void> {
-  await performRequest<void>(`${API_BASE_URL}/sounds/${id}`, {
+  await performRequest<void>(`${API_BASE_URL}/${id}`, {
     method: 'DELETE',
   });
 }
@@ -100,7 +100,7 @@ export async function uploadBase64Audio(
   base64Content: string,
   duration?: number
 ): Promise<{ publicUrl: string }> {
-  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/sounds/upload/base64`, {
+  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/upload/base64`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, fileContent: base64Content, duration }),
