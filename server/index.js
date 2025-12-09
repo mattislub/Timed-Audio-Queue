@@ -15,6 +15,25 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({ dest: uploadsDir });
 
+function sanitizeFileName(fileName) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function buildPublicUrl(req, fileName) {
+  return `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+}
+
+async function saveBase64File(req, fileName, base64Content) {
+  const safeName = `${Date.now()}-${sanitizeFileName(fileName)}`;
+  const filePath = path.join(uploadsDir, safeName);
+  const [, base64Data = base64Content] = base64Content.split(',');
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  await fs.promises.writeFile(filePath, buffer);
+
+  return { filePath, publicUrl: buildPublicUrl(req, safeName) };
+}
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -119,6 +138,7 @@ app.post('/api/sounds', async (req, res) => {
   const {
     file_name,
     file_url,
+    file_content,
     plays_completed = 0,
     total_plays = 6,
     is_playing = 0,
@@ -127,21 +147,28 @@ app.post('/api/sounds', async (req, res) => {
     duration = null,
   } = req.body;
 
-  if (!file_name || !file_url) {
-    return res.status(400).send('file_name and file_url are required');
-  }
-
-  const nextPlayAtValue = toMySqlDateTime(next_play_at ?? new Date());
-  if (!nextPlayAtValue) {
-    return res.status(400).send('Invalid next_play_at timestamp');
-  }
-
   try {
+    let resolvedFileUrl = file_url;
+
+    if (file_content) {
+      const saveResult = await saveBase64File(req, file_name || 'sound', file_content);
+      resolvedFileUrl = saveResult.publicUrl;
+    }
+
+    if (!file_name || !resolvedFileUrl) {
+      return res.status(400).send('file_name and file_url or file_content are required');
+    }
+
+    const nextPlayAtValue = toMySqlDateTime(next_play_at ?? new Date());
+    if (!nextPlayAtValue) {
+      return res.status(400).send('Invalid next_play_at timestamp');
+    }
+
     const playbackSpeedsJson = playback_speeds ? JSON.stringify(playback_speeds) : null;
     await pool.query(
       `INSERT INTO sounds (id, file_name, file_url, plays_completed, total_plays, is_playing, next_play_at, playback_speeds, duration)
        VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [file_name, file_url, plays_completed, total_plays, is_playing ? 1 : 0, nextPlayAtValue, playbackSpeedsJson, duration],
+      [file_name, resolvedFileUrl, plays_completed, total_plays, is_playing ? 1 : 0, nextPlayAtValue, playbackSpeedsJson, duration],
     );
     res.status(201).send('Created');
   } catch (error) {
@@ -233,11 +260,7 @@ app.post('/api/sounds/upload/base64', async (req, res) => {
   }
 
   try {
-    const buffer = Buffer.from(fileContent, 'base64');
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = path.join(uploadsDir, safeName);
-    await fs.promises.writeFile(filePath, buffer);
-    const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${safeName}`;
+    const { publicUrl } = await saveBase64File(req, fileName, fileContent);
     res.status(201).json({ publicUrl, duration });
   } catch (error) {
     console.error('Failed to save base64 file', error);
