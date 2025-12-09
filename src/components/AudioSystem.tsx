@@ -156,6 +156,7 @@ export function AudioSystem() {
     const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
 
     addDebugLog(`מנסה להפעיל ${sound.file_name} (${sound.id}) במהירות ${currentSpeed}x`);
+    addDebugLog(`כתובת ההקלטה להשמעה: ${sound.file_url}`);
     setCurrentlyPlaying(soundId);
     await updateSound(soundId, { is_playing: true });
 
