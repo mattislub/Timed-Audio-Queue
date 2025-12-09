@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f2937" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Audio Queue" />
+
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+
+    <title>Timed Audio Queue</title>
+    <meta name="description" content="Record, manage, and playback audio with custom timing and speeds" />
+    <meta property="og:title" content="Timed Audio Queue" />
+    <meta property="og:description" content="Record, manage, and playback audio with custom timing and speeds" />
+    <meta property="og:image" content="/icons/icon-512x512.png" />
+    <meta property="og:type" content="web app" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Timed Audio Queue" />
+    <meta name="twitter:description" content="Record, manage, and playback audio with custom timing and speeds" />
+    <meta name="twitter:image" content="/icons/icon-512x512.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {
+          console.log('Service Worker registration failed');
+        });
+      }
+    </script>
+  </body>
+</html>
