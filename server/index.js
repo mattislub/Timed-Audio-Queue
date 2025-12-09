@@ -61,13 +61,32 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadsDir));
 
-function mapSoundRow(row) {
-  let playbackSpeeds;
-  try {
-    playbackSpeeds = row.playback_speeds ? JSON.parse(row.playback_speeds) : undefined;
-  } catch (error) {
-    console.warn('Failed to parse playback_speeds JSON', error);
+function parsePlaybackSpeeds(rawValue) {
+  if (rawValue === null || rawValue === undefined) return undefined;
+
+  if (Array.isArray(rawValue)) return rawValue;
+
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+
+    try {
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        return JSON.parse(trimmed);
+      }
+    } catch (error) {
+      console.warn('Failed to parse playback_speeds JSON', error);
+      return undefined;
+    }
+
+    const parts = trimmed.split(',').map((part) => Number.parseFloat(part.trim())).filter(Number.isFinite);
+    return parts.length ? parts : undefined;
   }
+
+  return undefined;
+}
+
+function mapSoundRow(row) {
+  const playbackSpeeds = parsePlaybackSpeeds(row.playback_speeds);
 
   return {
     ...row,
