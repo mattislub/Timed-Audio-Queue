@@ -1,9 +1,7 @@
-const CACHE_NAME = 'audio-queue-v1';
+const CACHE_NAME = 'audio-queue-v2';
 const urlsToCache = [
   '/',
-  '/index.html',
-  '/src/main.tsx',
-  '/src/index.css'
+  '/index.html'
 ];
 
 self.addEventListener('install', event => {
@@ -37,6 +35,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  const requestUrl = new URL(event.request.url);
+
+  // Only handle same-origin requests to avoid interfering with external APIs.
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(response => {
       if (response) {
@@ -59,6 +64,11 @@ self.addEventListener('fetch', event => {
           if (response) {
             return response;
           }
+
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+
           return new Response('Offline - resource not available', {
             status: 503,
             statusText: 'Service Unavailable',
