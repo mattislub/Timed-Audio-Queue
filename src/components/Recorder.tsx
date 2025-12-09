@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Mic, Square, Upload, Trash2 } from 'lucide-react';
+import { Mic, Square, Trash2 } from 'lucide-react';
 
 interface RecorderProps {
   onUpload: (file: File, fileName: string) => void;
@@ -12,6 +12,7 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const recordingFileNameRef = useRef<string>('');
 
   const startRecording = async () => {
     try {
@@ -19,6 +20,7 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
+      recordingFileNameRef.current = `recording-${Date.now()}.webm`;
 
       mediaRecorder.ondataavailable = (e) => {
         chunksRef.current.push(e.data);
@@ -27,6 +29,10 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         setRecordedBlob(blob);
+        const fileName = recordingFileNameRef.current || `recording-${Date.now()}.webm`;
+        const file = new File([blob], fileName, { type: 'audio/webm' });
+        onUpload(file, fileName);
+        recordingFileNameRef.current = '';
       };
 
       mediaRecorder.start();
@@ -44,16 +50,10 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
     }
   };
 
-  const handleUpload = () => {
-    if (!recordedBlob) return;
-    const file = new File([recordedBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
-    onUpload(file, `recording-${Date.now()}.webm`);
-    setRecordedBlob(null);
-  };
-
   const clearRecording = () => {
     setRecordedBlob(null);
     chunksRef.current = [];
+    recordingFileNameRef.current = '';
     if (audioRef.current) {
       audioRef.current.src = '';
     }
@@ -104,15 +104,8 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
               />
             </div>
 
+            <p className="text-xs text-slate-300">ההקלטה נשלחת אוטומטית בעת עצירה. אפשר לנקות את התצוגה כאן:</p>
             <div className="flex gap-2">
-              <button
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 text-white rounded-lg transition"
-              >
-                <Upload className="w-4 h-4" />
-                {isUploading ? 'Uploading...' : 'Upload Recording'}
-              </button>
               <button
                 onClick={clearRecording}
                 disabled={isUploading}
