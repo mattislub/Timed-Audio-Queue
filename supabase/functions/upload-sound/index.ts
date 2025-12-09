@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
 
     const fileBuffer = await file.arrayBuffer();
 
-    const { data, error } = await supabaseClient.storage
+    const { error } = await supabaseClient.storage
       .from("sounds")
       .upload(fileName, new Uint8Array(fileBuffer), {
         upsert: false,

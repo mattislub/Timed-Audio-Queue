@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Mic, Square, Upload, Play, Trash2 } from 'lucide-react';
+import { Mic, Square, Upload, Trash2 } from 'lucide-react';
 
 interface RecorderProps {
   onUpload: (file: File, fileName: string) => void;
