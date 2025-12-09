@@ -193,16 +193,20 @@ export function AudioSystem() {
 
   if (showSharePage) {
     return (
-      <div>
-        <div className="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 p-4">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm text-emerald-200">שיתוף השמעות</p>
+            <h2 className="text-2xl font-semibold">שיתוף קבצי שמע למשתמשים</h2>
+          </div>
           <button
             onClick={() => setShowSharePage(false)}
-            className="text-slate-400 hover:text-white transition"
+            className="text-slate-200 hover:text-white transition"
           >
-            ← Back to Audio System
+            ← חזרה למערכת
           </button>
         </div>
-        <div className="pt-20">
+        <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-lg">
           <ShareSounds />
         </div>
       </div>
@@ -210,156 +214,161 @@ export function AudioSystem() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Audio System</h1>
-            <p className="text-slate-400">Upload audio files to play them 6 times with 30-second intervals</p>
-          </div>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm text-emerald-200">סשן חדש</p>
+          <h2 className="text-3xl font-bold">מערכת ההשמעה החכמה</h2>
+          <p className="text-slate-300 mt-2">העלו קבצי שמע, הגדירו מהירויות והמערכת תדאג להשמיע 6 פעמים עם מרווח של 30 שניות.</p>
+        </div>
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowSharePage(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-semibold rounded-lg transition shadow-lg shadow-emerald-500/30"
           >
             <Send className="w-4 h-4" />
-            Share with Users
+            שיתוף משתמשים
           </button>
+          <div className="flex items-center gap-3 px-4 py-2 rounded-lg border border-slate-800 bg-slate-900/60">
+            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-sm text-slate-300">מצב מערכת פעיל</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-slate-900/70 rounded-2xl border border-slate-800 p-6 shadow-lg">
+            <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <Upload className="w-10 h-10 text-emerald-400 mb-2" />
+                <p className="text-sm text-slate-300">
+                  {isUploading ? 'מעלה את הקובץ...' : 'לחצו כאן כדי להעלות קובץ שמע'}
+                </p>
+              </div>
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div className="space-y-4">
+            <audio ref={audioRef} className="hidden" />
+            {sounds.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-slate-900/60 border border-slate-800 rounded-xl">אין עדיין קבצי שמע במערכת</div>
+            ) : (
+              sounds.map(sound => {
+                const isReady = !sound.is_playing && sound.plays_completed < sound.total_plays;
+                const countdown = timeUntilNextPlay[sound.id] || 0;
+                const progress = (sound.plays_completed / sound.total_plays) * 100;
+
+                const soundSpeeds = playbackSpeeds[sound.id] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
+                const isExpanded = selectedSoundForSettings === sound.id;
+
+                return (
+                  <div
+                    key={sound.id}
+                    className={`bg-slate-900/70 rounded-xl border transition shadow-lg ${
+                      sound.is_playing
+                        ? 'border-emerald-500/60 bg-emerald-500/5'
+                        : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold truncate">{sound.file_name}</p>
+                          <div className="mt-2 space-y-2">
+                            <div className="w-full bg-slate-800 rounded-full h-2">
+                              <div
+                                className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-3 items-center text-sm text-slate-300">
+                              <span className="px-2 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs">{sound.plays_completed} / {sound.total_plays} השמעות</span>
+                              {isReady && countdown > 0 && (
+                                <span className="flex items-center gap-1 text-emerald-200">
+                                  <Clock className="w-3 h-3" />
+                                  השמעה הבאה בעוד {countdown}s
+                                </span>
+                              )}
+                              {sound.is_playing && (
+                                <span className="text-emerald-400 flex items-center gap-1">
+                                  <Play className="w-3 h-3" />
+                                  מתנגן עכשיו
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedSoundForSettings(
+                              isExpanded ? null : sound.id
+                            )}
+                            className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-emerald-300 transition"
+                            title="הגדרות מהירות"
+                          >
+                            <Settings className="w-5 h-5" />
+                          </button>
+                          {sound.plays_completed >= sound.total_plays ? (
+                            <button
+                              onClick={() => deleteSoundItem(sound.id)}
+                              className="p-2 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-red-400 transition"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          ) : (
+                            <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800/80">
+                              <Pause className="w-5 h-5 text-slate-400" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                          <p className="text-sm font-medium text-slate-200">מהירות לכל השמעה:</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                            {soundSpeeds.map((speed, index) => (
+                              <div key={index} className="space-y-1">
+                                <label className="text-xs text-slate-400">השמעה {index + 1}</label>
+                                <select
+                                  value={speed}
+                                  onChange={(e) => updatePlaybackSpeed(sound.id, index, e.target.value)}
+                                  className="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
+                                >
+                                  <option value="0.5">0.5x</option>
+                                  <option value="0.75">0.75x</option>
+                                  <option value="1.0">1.0x</option>
+                                  <option value="1.25">1.25x</option>
+                                  <option value="1.5">1.5x</option>
+                                  <option value="1.75">1.75x</option>
+                                  <option value="2.0">2.0x</option>
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8 mb-8">
-          <div className="lg:col-span-2">
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 mb-8">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:bg-slate-700/50 transition">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="w-10 h-10 text-slate-400 mb-2" />
-                  <p className="text-sm text-slate-300">
-                    {isUploading ? 'Uploading...' : 'Click to upload audio file'}
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  accept="audio/*"
-                  onChange={handleFileUpload}
-                  disabled={isUploading}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-          <div className="lg:col-span-1">
+        <div className="lg:col-span-1">
+          <div className="bg-slate-900/70 rounded-2xl border border-slate-800 p-6 shadow-lg sticky top-24">
             <Recorder onUpload={handleRecordingUpload} isUploading={isUploading} />
           </div>
-        </div>
-
-        <audio ref={audioRef} className="hidden" />
-
-        <div className="space-y-4">
-          {sounds.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <p>No audio files uploaded yet</p>
-            </div>
-          ) : (
-            sounds.map(sound => {
-              const isReady = !sound.is_playing && sound.plays_completed < sound.total_plays;
-              const countdown = timeUntilNextPlay[sound.id] || 0;
-              const progress = (sound.plays_completed / sound.total_plays) * 100;
-
-              const soundSpeeds = playbackSpeeds[sound.id] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
-              const isExpanded = selectedSoundForSettings === sound.id;
-
-              return (
-                <div
-                  key={sound.id}
-                  className={`bg-slate-800 rounded-lg border transition ${
-                    sound.is_playing
-                      ? 'border-emerald-500 bg-slate-800/80'
-                      : 'border-slate-700 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-white font-medium truncate">{sound.file_name}</p>
-                        <div className="mt-2 space-y-2">
-                          <div className="w-full bg-slate-700 rounded-full h-2">
-                            <div
-                              className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between text-sm text-slate-400">
-                            <span>{sound.plays_completed} / {sound.total_plays} plays</span>
-                            {isReady && countdown > 0 && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                Next in {countdown}s
-                              </span>
-                            )}
-                            {sound.is_playing && (
-                              <span className="text-emerald-500 flex items-center gap-1">
-                                <Play className="w-3 h-3" />
-                                Playing...
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="ml-4 flex items-center gap-2">
-                        <button
-                          onClick={() => setSelectedSoundForSettings(
-                            isExpanded ? null : sound.id
-                          )}
-                          className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-blue-400 transition"
-                          title="Speed settings"
-                        >
-                          <Settings className="w-5 h-5" />
-                        </button>
-                        {sound.plays_completed >= sound.total_plays ? (
-                          <button
-                            onClick={() => deleteSoundItem(sound.id)}
-                            className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        ) : (
-                          <div className="w-10 h-10 flex items-center justify-center rounded bg-slate-700">
-                            <Pause className="w-5 h-5 text-slate-400" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
-                        <p className="text-sm font-medium text-slate-300">Playback speeds for each play:</p>
-                        <div className="grid grid-cols-6 gap-2">
-                          {soundSpeeds.map((speed, index) => (
-                            <div key={index} className="space-y-1">
-                              <label className="text-xs text-slate-400">Play {index + 1}</label>
-                              <select
-                                value={speed}
-                                onChange={(e) => updatePlaybackSpeed(sound.id, index, e.target.value)}
-                                className="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
-                              >
-                                <option value="0.5">0.5x</option>
-                                <option value="0.75">0.75x</option>
-                                <option value="1.0">1.0x</option>
-                                <option value="1.25">1.25x</option>
-                                <option value="1.5">1.5x</option>
-                                <option value="1.75">1.75x</option>
-                                <option value="2.0">2.0x</option>
-                              </select>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
     </div>
