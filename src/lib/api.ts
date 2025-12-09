@@ -28,9 +28,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function performRequest<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  try {
+    const response = await fetch(input, init);
+    return await handleResponse<T>(response);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Could not reach API at ${API_BASE_URL}. Please verify the server is running and accessible.`);
+    }
+    throw error instanceof Error ? error : new Error('Unexpected request error');
+  }
+}
+
 export async function fetchSounds(): Promise<Sound[]> {
-  const response = await fetch(`${API_BASE_URL}/sounds`);
-  return handleResponse<Sound[]>(response);
+  return performRequest<Sound[]>(`${API_BASE_URL}/sounds`);
 }
 
 export async function uploadSoundFile(file: File, fileName: string): Promise<{ publicUrl: string }> {
@@ -38,63 +49,50 @@ export async function uploadSoundFile(file: File, fileName: string): Promise<{ p
   formData.append('file', file);
   formData.append('fileName', fileName);
 
-  const response = await fetch(`${API_BASE_URL}/sounds/upload`, {
+  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/sounds/upload`, {
     method: 'POST',
     body: formData,
   });
-
-  return handleResponse<{ publicUrl: string }>(response);
 }
 
 export async function createSound(payload: Partial<Sound>): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sounds`, {
+  await performRequest<void>(`${API_BASE_URL}/sounds`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
-  await handleResponse(response);
 }
 
 export async function updateSound(id: string, payload: Partial<Sound>): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sounds/${id}`, {
+  await performRequest<void>(`${API_BASE_URL}/sounds/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
-  await handleResponse(response);
 }
 
 export async function deleteSound(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sounds/${id}`, {
+  await performRequest<void>(`${API_BASE_URL}/sounds/${id}`, {
     method: 'DELETE',
   });
-
-  await handleResponse(response);
 }
 
 export async function fetchShares(): Promise<SoundShare[]> {
-  const response = await fetch(`${API_BASE_URL}/sound-shares`);
-  return handleResponse<SoundShare[]>(response);
+  return performRequest<SoundShare[]>(`${API_BASE_URL}/sound-shares`);
 }
 
 export async function createShare(payload: { sound_id: string; user_email: string }): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sound-shares`, {
+  await performRequest<void>(`${API_BASE_URL}/sound-shares`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
-  await handleResponse(response);
 }
 
 export async function deleteShare(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sound-shares/${id}`, {
+  await performRequest<void>(`${API_BASE_URL}/sound-shares/${id}`, {
     method: 'DELETE',
   });
-
-  await handleResponse(response);
 }
 
 export async function uploadBase64Audio(
@@ -102,11 +100,9 @@ export async function uploadBase64Audio(
   base64Content: string,
   duration?: number
 ): Promise<{ publicUrl: string }> {
-  const response = await fetch(`${API_BASE_URL}/sounds/upload/base64`, {
+  return performRequest<{ publicUrl: string }>(`${API_BASE_URL}/sounds/upload/base64`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, fileContent: base64Content, duration }),
   });
-
-  return handleResponse<{ publicUrl: string }>(response);
 }

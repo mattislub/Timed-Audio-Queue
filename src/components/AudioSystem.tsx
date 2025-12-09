@@ -19,6 +19,7 @@ export function AudioSystem() {
   const [selectedSoundForSettings, setSelectedSoundForSettings] = useState<string | null>(null);
   const [showSharePage, setShowSharePage] = useState(false);
   const [playbackSpeeds, setPlaybackSpeeds] = useState<Record<string, string[]>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const updateCountdownTimers = useCallback(() => {
@@ -55,25 +56,31 @@ export function AudioSystem() {
   }, [playbackSpeeds, sounds]);
 
   const loadSounds = useCallback(async () => {
-    const data = await fetchSounds();
+    try {
+      const data = await fetchSounds();
+      setLoadError(null);
+      setSounds(data);
+      const speeds: Record<string, string[]> = {};
+      data.forEach(sound => {
+        speeds[sound.id] = sound.playback_speeds || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
+      });
+      setPlaybackSpeeds(speeds);
 
-    setSounds(data);
-    const speeds: Record<string, string[]> = {};
-    data.forEach(sound => {
-      speeds[sound.id] = sound.playback_speeds || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
-    });
-    setPlaybackSpeeds(speeds);
+      for (const sound of data) {
+        if (!sound.is_playing && sound.plays_completed < sound.total_plays) {
+          const now = new Date().getTime();
+          const nextPlayTime = new Date(sound.next_play_at).getTime();
 
-    for (const sound of data) {
-      if (!sound.is_playing && sound.plays_completed < sound.total_plays) {
-        const now = new Date().getTime();
-        const nextPlayTime = new Date(sound.next_play_at).getTime();
-
-        if (now >= nextPlayTime && !currentlyPlaying) {
-          await startPlayback(sound.id);
-          break;
+          if (now >= nextPlayTime && !currentlyPlaying) {
+            await startPlayback(sound.id);
+            break;
+          }
         }
       }
+    } catch (error) {
+      console.error('Failed to load sounds', error);
+      setLoadError(error instanceof Error ? error.message : 'Unable to load sounds.');
+      setSounds([]);
     }
   }, [currentlyPlaying, startPlayback]);
 
@@ -154,8 +161,12 @@ export function AudioSystem() {
   };
 
   const deleteSoundItem = async (id: string) => {
-    await deleteSound(id);
-    await loadSounds();
+    try {
+      await deleteSound(id);
+      await loadSounds();
+    } catch (error) {
+      alert('Error deleting sound: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   const updatePlaybackSpeed = async (soundId: string, playIndex: number, speed: string) => {
@@ -221,6 +232,11 @@ export function AudioSystem() {
           <h2 className="text-3xl font-bold">מערכת ההשמעה החכמה</h2>
           <p className="text-slate-300 mt-2">העלו קבצי שמע, הגדירו מהירויות והמערכת תדאג להשמיע 6 פעמים עם מרווח של 30 שניות.</p>
         </div>
+        {loadError && (
+          <div className="rounded-lg border border-red-700 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            {loadError}
+          </div>
+        )}
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowSharePage(true)}

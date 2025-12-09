@@ -9,6 +9,7 @@ export function ShareSounds() {
   const [isLoading, setIsLoading] = useState(false);
   const [shares, setShares] = useState<SoundShare[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSounds();
@@ -16,13 +17,27 @@ export function ShareSounds() {
   }, []);
 
   const loadSounds = async () => {
-    const data = await fetchSounds();
-    setSounds(data);
+    try {
+      const data = await fetchSounds();
+      setLoadError(null);
+      setSounds(data);
+    } catch (error) {
+      console.error('Failed to fetch sounds', error);
+      setLoadError(error instanceof Error ? error.message : 'Unable to load sounds.');
+      setSounds([]);
+    }
   };
 
   const loadShares = async () => {
-    const data = await fetchShares();
-    setShares(data);
+    try {
+      const data = await fetchShares();
+      setLoadError(null);
+      setShares(data);
+    } catch (error) {
+      console.error('Failed to fetch shares', error);
+      setLoadError(error instanceof Error ? error.message : 'Unable to load shares.');
+      setShares([]);
+    }
   };
 
   const shareSound = async () => {
@@ -66,6 +81,11 @@ export function ShareSounds() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-2">Share Sounds</h1>
         <p className="text-slate-400 mb-8">Send your sounds to other users</p>
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-red-700 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            {loadError}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-8">
           {/* Share Panel */}
