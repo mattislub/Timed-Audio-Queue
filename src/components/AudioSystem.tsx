@@ -54,17 +54,17 @@ export function AudioSystem() {
   const getSecureAudioUrl = useCallback(
     (url: string) => {
       try {
-        const parsed = new URL(url, window.location.href);
+        const parsed = new URL(url);
 
         if (parsed.protocol === 'http:') {
           parsed.protocol = 'https:';
-          addDebugLog(`שודרג מקור שמע ל-HTTPS עבור ${parsed.pathname}`);
+          addDebugLog(`שודרג מקור שמע ל-HTTPS עבור ${parsed.href}`);
         }
 
-        return parsed.toString();
+        return parsed.href;
       } catch (error) {
         console.warn('Failed to normalize audio URL', error);
-        return url.startsWith('http:') ? url.replace(/^http:/, 'https:') : url;
+        return url.startsWith('http://') ? `https://${url.slice('http://'.length)}` : url;
       }
     },
     [addDebugLog],
