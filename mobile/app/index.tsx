@@ -12,7 +12,12 @@ import {
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Mic, Square, Play, Share2, Trash2, Plus } from 'lucide-react-native';
-import { supabase } from '../lib/supabase';
+import {
+  createRemoteSound,
+  deleteRemoteSound,
+  fetchRemoteSounds,
+  uploadBase64Recording,
+} from '../lib/api';
 
 interface Recording {
   id: string;
@@ -46,24 +51,16 @@ export default function HomeScreen() {
 
   const loadRecordings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('sounds')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        setRecordings(
-          data.map((sound) => ({
-            id: sound.id,
-            uri: sound.file_url,
-            duration: sound.duration || 0,
-            filename: sound.filename || 'Recording',
-            isPlaying: false,
-          }))
-        );
-      }
+      const data = await fetchRemoteSounds();
+      setRecordings(
+        data.map((sound) => ({
+          id: sound.id,
+          uri: sound.file_url,
+          duration: sound.duration || 0,
+          filename: sound.file_name || 'Recording',
+          isPlaying: false,
+        }))
+      );
     } catch (error) {
       console.error('Error loading recordings:', error);
     }
@@ -147,15 +144,17 @@ export default function HomeScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      const { data, error } = await supabase.functions.invoke('upload-sound', {
-        body: {
-          filename: recording.filename,
-          fileContent,
-          duration: recording.duration,
-        },
-      });
+      const { publicUrl } = await uploadBase64Recording(
+        recording.filename,
+        fileContent,
+        recording.duration
+      );
 
-      if (error) throw error;
+      await createRemoteSound({
+        file_name: recording.filename,
+        file_url: publicUrl,
+        duration: recording.duration,
+      });
 
       Alert.alert('Success', 'Recording uploaded successfully');
       loadRecordings();
@@ -197,12 +196,7 @@ export default function HomeScreen() {
       await FileSystem.deleteAsync(recording.uri);
       setRecordings(recordings.filter((r) => r.id !== recording.id));
 
-      const { error } = await supabase
-        .from('sounds')
-        .delete()
-        .eq('id', recording.id);
-
-      if (error) throw error;
+      await deleteRemoteSound(recording.id);
     } catch (error) {
       Alert.alert('Error', 'Failed to delete recording');
       console.error('Error deleting recording:', error);

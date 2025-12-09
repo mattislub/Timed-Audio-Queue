@@ -67,19 +67,19 @@ Then:
 ### Features
 - Native audio recording with system audio codecs
 - Local file management
-- Direct upload to Supabase
+- Direct upload to your API/MySQL backend
 - Play back recordings
 - Delete recordings
 - Beautiful native UI
 
 ### Environment Variables
 
-Create `.env` file in `mobile/` directory:
+Both the PWA and the mobile app now talk to your own REST API that sits in front of a MySQL database.
 
-```
-EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+- **Web (.env)**
+  - `VITE_API_BASE_URL` – Base URL of your API (e.g. `https://api.example.com/api`)
+- **Mobile (mobile/.env)**
+  - `EXPO_PUBLIC_API_BASE_URL` – Same API base URL for the Expo client
 
 ### Building for Distribution
 
@@ -95,20 +95,18 @@ cd mobile
 eas build --platform android
 ```
 
-## Database Setup
+## Database Setup (MySQL)
 
-Both apps use Supabase for data persistence. The database schema includes:
+Provision a MySQL database on your server and back it with a small REST API. The frontend assumes the API exposes endpoints such as:
+- `GET /api/sounds` / `POST /api/sounds` / `PATCH /api/sounds/:id` / `DELETE /api/sounds/:id`
+- `POST /api/sounds/upload` for multipart audio uploads and `POST /api/sounds/upload/base64` for base64 payloads
+- `GET /api/sound-shares` / `POST /api/sound-shares` / `DELETE /api/sound-shares/:id`
 
-### Tables
-- `sounds` - Audio recordings with metadata
-- `sound_shares` - Sharing information between users
+Suggested MySQL tables:
+- `sounds` – `id` (UUID/PK), `file_name`, `file_url`, `plays_completed`, `total_plays`, `is_playing`, `next_play_at`, `created_at`, optional `playback_speeds` JSON/text, optional `duration`
+- `sound_shares` – `id` (UUID/PK), `sound_id` (FK), `user_email`, `created_at`
 
-### Configuration
-
-1. Get your Supabase credentials from the dashboard
-2. Set environment variables:
-   - Web: Update `.env` file
-   - Mobile: Update `mobile/.env` file
+Point `VITE_API_BASE_URL`/`EXPO_PUBLIC_API_BASE_URL` at your API after it is wired to MySQL.
 
 ## Deployment
 
@@ -131,7 +129,7 @@ eas submit
 ## Architecture
 
 ### Shared
-- Supabase for backend
+- REST API + MySQL for backend data
 - TypeScript for type safety
 - Responsive design patterns
 
@@ -148,9 +146,8 @@ eas submit
 
 ## Security
 
-- Authentication through Supabase
-- Row-level security (RLS) policies on database
-- Secure file uploads with server validation
+- Secure file uploads with server validation on your API
+- Ensure API routes are authenticated/authorized as needed
 - No sensitive data in client code
 
 ## Troubleshooting
@@ -166,7 +163,7 @@ eas submit
 - Check network connectivity
 
 ### Upload Failures
-- Verify Supabase credentials
+- Verify your API URL and MySQL credentials
 - Check network connection
 - Ensure file permissions are granted
 
@@ -175,4 +172,4 @@ eas submit
 For issues or questions, check:
 1. Browser console (F12) for web errors
 2. Expo CLI logs for mobile errors
-3. Supabase dashboard for database issues
+3. API server and MySQL logs for backend issues

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Send, Copy, Check, Trash2 } from 'lucide-react';
-import { supabase, type Sound } from '../lib/supabase';
+import { createShare, deleteShare, fetchShares, fetchSounds, type Sound, type SoundShare } from '../lib/api';
 
 export function ShareSounds() {
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [selectedSound, setSelectedSound] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [shares, setShares] = useState<any[]>([]);
+  const [shares, setShares] = useState<SoundShare[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,25 +16,13 @@ export function ShareSounds() {
   }, []);
 
   const loadSounds = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('sounds')
-      .select('*')
-      .eq('created_by', user.id)
-      .order('created_at', { ascending: false });
-
-    setSounds(data || []);
+    const data = await fetchSounds();
+    setSounds(data);
   };
 
   const loadShares = async () => {
-    const { data } = await supabase
-      .from('sound_shares')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    setShares(data || []);
+    const data = await fetchShares();
+    setShares(data);
   };
 
   const shareSound = async () => {
@@ -45,26 +33,24 @@ export function ShareSounds() {
 
     setIsLoading(true);
 
-    const { error } = await supabase
-      .from('sound_shares')
-      .insert({
+    try {
+      await createShare({
         sound_id: selectedSound,
         user_email: userEmail,
       });
 
-    if (error) {
-      alert('Error sharing sound: ' + error.message);
-    } else {
       setUserEmail('');
       alert('Sound shared successfully!');
       await loadShares();
+    } catch (error) {
+      alert('Error sharing sound: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
 
     setIsLoading(false);
   };
 
-  const deleteShare = async (id: string) => {
-    await supabase.from('sound_shares').delete().eq('id', id);
+  const deleteShareEntry = async (id: string) => {
+    await deleteShare(id);
     await loadShares();
   };
 
@@ -149,7 +135,7 @@ export function ShareSounds() {
                         <p className="text-xs text-slate-400">{share.user_email}</p>
                       </div>
                       <button
-                        onClick={() => deleteShare(share.id)}
+                        onClick={() => deleteShareEntry(share.id)}
                         className="ml-2 p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-red-400 transition"
                       >
                         <Trash2 className="w-4 h-4" />

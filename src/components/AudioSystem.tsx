@@ -1,6 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, Play, Pause, Trash2, Clock, Send, Settings } from 'lucide-react';
-import { supabase, type Sound } from '../lib/supabase';
+import {
+  createSound,
+  deleteSound,
+  fetchSounds,
+  type Sound,
+  updateSound,
+  uploadSoundFile,
+} from '../lib/api';
 import { Recorder } from './Recorder';
 import { ShareSounds } from './ShareSounds';
 
@@ -13,57 +20,8 @@ export function AudioSystem() {
   const [showSharePage, setShowSharePage] = useState(false);
   const [playbackSpeeds, setPlaybackSpeeds] = useState<Record<string, string[]>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
-  const playbackTimerRef = useRef<NodeJS.Timeout>();
-  const countdownIntervalRef = useRef<NodeJS.Timeout>();
 
-  useEffect(() => {
-    loadSounds();
-    const interval = setInterval(loadSounds, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (currentlyPlaying && audioRef.current) {
-      audioRef.current.addEventListener('ended', handlePlaybackEnd);
-      return () => audioRef.current?.removeEventListener('ended', handlePlaybackEnd);
-    }
-  }, [currentlyPlaying]);
-
-  useEffect(() => {
-    updateCountdownTimers();
-    const interval = setInterval(updateCountdownTimers, 1000);
-    return () => clearInterval(interval);
-  }, [sounds]);
-
-  const loadSounds = async () => {
-    const { data } = await supabase
-      .from('sounds')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setSounds(data);
-      const speeds: Record<string, string[]> = {};
-      data.forEach(sound => {
-        speeds[sound.id] = sound.playback_speeds || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
-      });
-      setPlaybackSpeeds(speeds);
-
-      for (const sound of data) {
-        if (!sound.is_playing && sound.plays_completed < sound.total_plays) {
-          const now = new Date().getTime();
-          const nextPlayTime = new Date(sound.next_play_at).getTime();
-
-          if (now >= nextPlayTime && !currentlyPlaying) {
-            await startPlayback(sound.id);
-            break;
-          }
-        }
-      }
-    }
-  };
-
-  const updateCountdownTimers = () => {
+  const updateCountdownTimers = useCallback(() => {
     const now = new Date().getTime();
     const newCountdowns: Record<string, number> = {};
 
@@ -76,18 +34,15 @@ export function AudioSystem() {
     });
 
     setTimeUntilNextPlay(newCountdowns);
-  };
+  }, [sounds]);
 
-  const startPlayback = async (soundId: string) => {
+  const startPlayback = useCallback(async (soundId: string) => {
     const sound = sounds.find(s => s.id === soundId);
     if (!sound || sound.is_playing || sound.plays_completed >= sound.total_plays) return;
 
     setCurrentlyPlaying(soundId);
 
-    await supabase
-      .from('sounds')
-      .update({ is_playing: true })
-      .eq('id', soundId);
+    await updateSound(soundId, { is_playing: true });
 
     if (audioRef.current) {
       const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
@@ -97,9 +52,32 @@ export function AudioSystem() {
       audioRef.current.playbackRate = currentSpeed;
       audioRef.current.play().catch(err => console.error('Playback error:', err));
     }
-  };
+  }, [playbackSpeeds, sounds]);
 
-  const handlePlaybackEnd = async () => {
+  const loadSounds = useCallback(async () => {
+    const data = await fetchSounds();
+
+    setSounds(data);
+    const speeds: Record<string, string[]> = {};
+    data.forEach(sound => {
+      speeds[sound.id] = sound.playback_speeds || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
+    });
+    setPlaybackSpeeds(speeds);
+
+    for (const sound of data) {
+      if (!sound.is_playing && sound.plays_completed < sound.total_plays) {
+        const now = new Date().getTime();
+        const nextPlayTime = new Date(sound.next_play_at).getTime();
+
+        if (now >= nextPlayTime && !currentlyPlaying) {
+          await startPlayback(sound.id);
+          break;
+        }
+      }
+    }
+  }, [currentlyPlaying, startPlayback]);
+
+  const handlePlaybackEnd = useCallback(async () => {
     if (!currentlyPlaying) return;
 
     const sound = sounds.find(s => s.id === currentlyPlaying);
@@ -110,27 +88,41 @@ export function AudioSystem() {
 
     if (hasMorePlays) {
       const nextPlayTime = new Date(Date.now() + 30 * 1000);
-      await supabase
-        .from('sounds')
-        .update({
-          plays_completed: newPlaysCompleted,
-          is_playing: false,
-          next_play_at: nextPlayTime.toISOString(),
-        })
-        .eq('id', currentlyPlaying);
+      await updateSound(currentlyPlaying, {
+        plays_completed: newPlaysCompleted,
+        is_playing: false,
+        next_play_at: nextPlayTime.toISOString(),
+      });
     } else {
-      await supabase
-        .from('sounds')
-        .update({
-          plays_completed: newPlaysCompleted,
-          is_playing: false,
-        })
-        .eq('id', currentlyPlaying);
+      await updateSound(currentlyPlaying, {
+        plays_completed: newPlaysCompleted,
+        is_playing: false,
+      });
     }
 
     setCurrentlyPlaying(null);
     await loadSounds();
-  };
+  }, [currentlyPlaying, loadSounds, sounds]);
+
+  useEffect(() => {
+    loadSounds();
+    const interval = setInterval(loadSounds, 1000);
+    return () => clearInterval(interval);
+  }, [loadSounds]);
+
+  useEffect(() => {
+    if (currentlyPlaying && audioRef.current) {
+      const audioEl = audioRef.current;
+      audioEl.addEventListener('ended', handlePlaybackEnd);
+      return () => audioEl.removeEventListener('ended', handlePlaybackEnd);
+    }
+  }, [currentlyPlaying, handlePlaybackEnd]);
+
+  useEffect(() => {
+    updateCountdownTimers();
+    const interval = setInterval(updateCountdownTimers, 1000);
+    return () => clearInterval(interval);
+  }, [updateCountdownTimers]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -140,45 +132,19 @@ export function AudioSystem() {
 
     try {
       const fileName = `${Date.now()}-${file.name}`;
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', fileName);
+      const uploadResult = await uploadSoundFile(file, fileName);
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-sound`;
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
+      await createSound({
+        file_name: file.name,
+        file_url: uploadResult.publicUrl,
+        plays_completed: 0,
+        total_plays: 6,
+        is_playing: false,
+        next_play_at: new Date().toISOString(),
+        playback_speeds: ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'],
       });
 
-      const uploadResult = await response.json();
-
-      if (!response.ok) {
-        alert('Upload error: ' + uploadResult.error);
-        setIsUploading(false);
-        return;
-      }
-
-      const { error: dbError } = await supabase
-        .from('sounds')
-        .insert({
-          file_name: file.name,
-          file_url: uploadResult.publicUrl,
-          plays_completed: 0,
-          total_plays: 6,
-          is_playing: false,
-          next_play_at: new Date().toISOString(),
-        });
-
-      if (dbError) {
-        alert('Database error: ' + dbError.message);
-      } else {
-        await loadSounds();
-      }
+      await loadSounds();
     } catch (error) {
       alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
@@ -187,13 +153,9 @@ export function AudioSystem() {
     event.target.value = '';
   };
 
-  const deleteSound = async (id: string) => {
-    await supabase.from('sounds').delete().eq('id', id);
+  const deleteSoundItem = async (id: string) => {
+    await deleteSound(id);
     await loadSounds();
-  };
-
-  const formatTime = (seconds: number) => {
-    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   };
 
   const updatePlaybackSpeed = async (soundId: string, playIndex: number, speed: string) => {
@@ -201,56 +163,26 @@ export function AudioSystem() {
     newSpeeds[playIndex] = speed;
     setPlaybackSpeeds({ ...playbackSpeeds, [soundId]: newSpeeds });
 
-    await supabase
-      .from('sounds')
-      .update({ playback_speeds: newSpeeds })
-      .eq('id', soundId);
+    await updateSound(soundId, { playback_speeds: newSpeeds });
   };
 
   const handleRecordingUpload = (file: File, fileName: string) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('fileName', fileName);
-
     (async () => {
       setIsUploading(true);
       try {
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-sound`;
-        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        const uploadResult = await uploadSoundFile(file, fileName);
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
+        await createSound({
+          file_name: file.name,
+          file_url: uploadResult.publicUrl,
+          plays_completed: 0,
+          total_plays: 6,
+          is_playing: false,
+          next_play_at: new Date().toISOString(),
+          playback_speeds: ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'],
         });
 
-        const uploadResult = await response.json();
-
-        if (!response.ok) {
-          alert('Upload error: ' + uploadResult.error);
-          setIsUploading(false);
-          return;
-        }
-
-        const { error: dbError } = await supabase
-          .from('sounds')
-          .insert({
-            file_name: file.name,
-            file_url: uploadResult.publicUrl,
-            plays_completed: 0,
-            total_plays: 6,
-            is_playing: false,
-            next_play_at: new Date().toISOString(),
-            playback_speeds: ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'],
-          });
-
-        if (dbError) {
-          alert('Database error: ' + dbError.message);
-        } else {
-          await loadSounds();
-        }
+        await loadSounds();
       } catch (error) {
         alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
       }
@@ -385,7 +317,7 @@ export function AudioSystem() {
                         </button>
                         {sound.plays_completed >= sound.total_plays ? (
                           <button
-                            onClick={() => deleteSound(sound.id)}
+                            onClick={() => deleteSoundItem(sound.id)}
                             className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition"
                           >
                             <Trash2 className="w-5 h-5" />
