@@ -22,6 +22,69 @@ export function AudioSystem() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const getMimeFromUrl = useCallback((url: string) => {
+    const extension = url.split('.').pop()?.split('?')[0]?.toLowerCase();
+    switch (extension) {
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'm4a':
+      case 'mp4':
+        return 'audio/mp4';
+      case 'webm':
+        return 'audio/webm';
+      default:
+        return undefined;
+    }
+  }, []);
+
+  const isSourceSupported = useCallback(
+    (audioEl: HTMLAudioElement, url: string) => {
+      const mime = getMimeFromUrl(url);
+      if (!mime) return true;
+
+      const support = audioEl.canPlayType(mime);
+      return support === 'probably' || support === 'maybe';
+    },
+    [getMimeFromUrl]
+  );
+
+  const waitForAudioReady = useCallback(async (audioEl: HTMLAudioElement) => {
+    await new Promise<void>((resolve, reject) => {
+      let timeoutId: number | undefined;
+
+      const onCanPlay = () => {
+        cleanup();
+        resolve();
+      };
+
+      const onError = () => {
+        cleanup();
+        reject(new Error('הקובץ לא נתמך או לא נטען בהצלחה.'));
+      };
+
+      const cleanup = () => {
+        audioEl.removeEventListener('canplaythrough', onCanPlay);
+        audioEl.removeEventListener('error', onError);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      audioEl.addEventListener('canplaythrough', onCanPlay, { once: true });
+      audioEl.addEventListener('error', onError, { once: true });
+
+      audioEl.load();
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('הטענת הקובץ חרגה מהזמן המותר.'));
+      }, 7000);
+    });
+  }, []);
+
   const updateCountdownTimers = useCallback(() => {
     const now = new Date().getTime();
     const newCountdowns: Record<string, number> = {};
@@ -49,6 +112,15 @@ export function AudioSystem() {
     const audioEl = audioRef.current;
     if (!audioEl) return;
 
+    if (!isSourceSupported(audioEl, sound.file_url)) {
+      setLoadError('פורמט הקובץ אינו נתמך על ידי הדפדפן. נסו להעלות קובץ אחר.');
+      await updateSound(soundId, {
+        is_playing: false,
+        next_play_at: new Date(Date.now() + 30 * 1000).toISOString(),
+      });
+      return;
+    }
+
     const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
     const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
 
@@ -58,18 +130,24 @@ export function AudioSystem() {
     try {
       audioEl.pause();
       audioEl.currentTime = 0;
-      audioEl.src = sound.file_url;
+      audioEl.src = encodeURI(sound.file_url);
       audioEl.playbackRate = currentSpeed;
-      audioEl.load();
+      await waitForAudioReady(audioEl);
       await audioEl.play();
       setLoadError(null);
     } catch (error) {
       console.error('Playback error:', error);
       setLoadError('הקובץ לא ניתן להשמעה. בדקו את פורמט הקובץ או נסו להעלות מחדש.');
       setCurrentlyPlaying(null);
-      await updateSound(soundId, { is_playing: false });
+      audioEl.pause();
+      audioEl.currentTime = 0;
+      audioEl.src = '';
+      await updateSound(soundId, {
+        is_playing: false,
+        next_play_at: new Date(Date.now() + 30 * 1000).toISOString(),
+      });
     }
-  }, [playbackSpeeds, sounds]);
+  }, [isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
 
   const loadSounds = useCallback(async () => {
     try {
