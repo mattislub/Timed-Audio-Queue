@@ -24,7 +24,7 @@ const pool = mysql.createPool({
 });
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3701;
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
