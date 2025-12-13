@@ -230,11 +230,13 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
       }
 
       setCurrentlyPlaying(null);
-      addDebugLog(`עצירת השמעה יזומה עבור ${soundId}`);
+      addDebugLog(`עצירת השמעה יזומה עבור ${soundId}. מתזמן ניסיון נוסף בעוד 30 שניות`);
+
+      const retryAt = new Date(Date.now() + 30 * 1000).toISOString();
 
       await updateSound(soundId, {
         is_playing: false,
-        next_play_at: new Date().toISOString(),
+        next_play_at: retryAt,
       });
 
       await loadSounds();
