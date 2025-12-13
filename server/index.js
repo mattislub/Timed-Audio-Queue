@@ -13,6 +13,10 @@ const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
+const logsDir = path.join(__dirname, '..', 'logs');
+fs.mkdirSync(logsDir, { recursive: true });
+const sessionLogPath = path.join(logsDir, 'session.log');
+
 const upload = multer({ dest: uploadsDir });
 
 function sanitizeFileName(fileName) {
@@ -64,6 +68,39 @@ console.log('DB ENV CONFIG:', {
 
 const app = express();
 const port = process.env.PORT || 3701;
+app.set('trust proxy', true);
+
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+
+  if (Array.isArray(forwardedFor) && forwardedFor.length) {
+    return forwardedFor[0];
+  }
+
+  if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+
+  res.on('finish', () => {
+    const durationMs = Date.now() - startedAt;
+    const ip = getClientIp(req);
+    const logLine = `${new Date().toISOString()} | ${ip} | ${req.method} ${req.originalUrl} | ${res.statusCode} | ${durationMs}ms\n`;
+
+    fs.appendFile(sessionLogPath, logLine, (err) => {
+      if (err) {
+        console.error('Failed to write session log', err);
+      }
+    });
+  });
+
+  next();
+});
 
 function toMySqlDateTime(value) {
   if (!value) return null;
