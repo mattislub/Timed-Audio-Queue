@@ -15,6 +15,8 @@ PORT=3701
 
 The defaults match the credentials you provided. The server also writes uploaded files to an `uploads/` folder in the project root and serves them from `/uploads/*`.
 
+Requests are logged to `logs/session.log` with timestamps, HTTP method, path, response status, and the detected client IP (including `X-Forwarded-For` when behind a proxy).
+
 ## Running locally
 Install dependencies and start the API server:
 
