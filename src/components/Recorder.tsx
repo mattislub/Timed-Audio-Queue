@@ -18,28 +18,27 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/mpeg')
-        ? 'audio/mpeg'
-        : 'audio/webm';
+      const preferredMime = 'audio/ogg;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(preferredMime)) {
+        alert('דפדפן זה לא תומך בהקלטת OGG/Opus. נסה דפדפן אחר.');
+        return;
+      }
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: preferredMime });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
-      recordingMimeTypeRef.current = mimeType;
-      const extension = mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
-      recordingFileNameRef.current = `recording-${Date.now()}.${extension}`;
+      recordingMimeTypeRef.current = preferredMime;
+      recordingFileNameRef.current = `recording-${Date.now()}.ogg`;
 
       mediaRecorder.ondataavailable = (e) => {
         chunksRef.current.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: recordingMimeTypeRef.current || 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: recordingMimeTypeRef.current || preferredMime });
         setRecordedBlob(blob);
-        const fallbackExtension = recordingMimeTypeRef.current === 'audio/mpeg' ? 'mp3' : 'webm';
-        const fileName =
-          recordingFileNameRef.current || `recording-${Date.now()}.${fallbackExtension}`;
-        const file = new File([blob], fileName, { type: recordingMimeTypeRef.current || 'audio/webm' });
+        const fileName = recordingFileNameRef.current || `recording-${Date.now()}.ogg`;
+        const file = new File([blob], fileName, { type: recordingMimeTypeRef.current || preferredMime });
         onUpload(file, fileName);
         recordingFileNameRef.current = '';
         recordingMimeTypeRef.current = '';
