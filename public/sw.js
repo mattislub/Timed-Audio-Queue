@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audio-queue-v2';
+const CACHE_NAME = 'audio-queue-v3';
 const urlsToCache = [
   '/',
   '/index.html'
@@ -42,42 +42,59 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Use a network-first strategy for navigation requests to avoid serving stale
+  // HTML that requires a manual refresh to load correctly.
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+          return response;
+        })
+        .catch(async () => (await caches.match(event.request)) || caches.match('/index.html')),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(response => {
       if (response) {
         return response;
       }
 
-      return fetch(event.request).then(response => {
-        if (!response || response.status !== 200 || response.type === 'error') {
-          return response;
-        }
-
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      }).catch(() => {
-        return caches.match(event.request).then(response => {
-          if (response) {
+      return fetch(event.request)
+        .then(response => {
+          if (!response || response.status !== 200 || response.type === 'error') {
             return response;
           }
 
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
 
-          return new Response('Offline - resource not available', {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: new Headers({
-              'Content-Type': 'text/plain'
-            })
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then(response => {
+            if (response) {
+              return response;
+            }
+
+            if (event.request.mode === 'navigate') {
+              return caches.match('/index.html');
+            }
+
+            return new Response('Offline - resource not available', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: new Headers({
+                'Content-Type': 'text/plain'
+              })
+            });
           });
         });
-      });
     })
   );
 });
