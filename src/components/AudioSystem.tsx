@@ -19,6 +19,15 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const formatCountdown = (totalSeconds: number) => {
+    const clamped = Math.max(0, totalSeconds);
+    const minutes = Math.floor(clamped / 60)
+      .toString()
+      .padStart(2, '0');
+    const seconds = (clamped % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
+
   const addDebugLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const formatted = `${timestamp} – ${message}`;
@@ -259,6 +268,27 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
         is_playing: false,
       });
       addDebugLog(`ההשמעה הסתיימה (${sound.file_name}). הושלמו כל ההשמעות`);
+
+      try {
+        await deleteSound(currentlyPlaying);
+        setSounds(prev => prev.filter(item => item.id !== currentlyPlaying));
+        setTimeUntilNextPlay(prev => {
+          const { [currentlyPlaying]: _removed, ...rest } = prev;
+          return rest;
+        });
+        setPlaybackSpeeds(prev => {
+          const { [currentlyPlaying]: _removed, ...rest } = prev;
+          return rest;
+        });
+        addDebugLog(`הקובץ ${sound.file_name} נמחק אוטומטית לאחר ${sound.total_plays} השמעות`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        addDebugLog(`מחיקה אוטומטית נכשלה עבור ${sound.file_name}: ${message}`);
+        await updateSound(currentlyPlaying, {
+          plays_completed: newPlaysCompleted,
+          is_playing: false,
+        });
+      }
     }
 
     setCurrentlyPlaying(null);
@@ -418,6 +448,11 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
             sounds.map(sound => {
               const isReady = !sound.is_playing && sound.plays_completed < sound.total_plays;
               const countdown = timeUntilNextPlay[sound.id] || 0;
+              const nextPlayTimeLabel = new Date(sound.next_play_at).toLocaleTimeString('he-IL', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
               const progress = (sound.plays_completed / sound.total_plays) * 100;
 
               const soundSpeeds = playbackSpeeds[sound.id] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
@@ -446,7 +481,13 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
                             {isReady && countdown > 0 && (
                               <span className="flex items-center gap-1 text-emerald-200">
                                 <Clock className="w-3 h-3" />
-                                השמעה הבאה בעוד {countdown}s
+                                השמעה הבאה בעוד {formatCountdown(countdown)}
+                              </span>
+                            )}
+                            {isReady && countdown === 0 && (
+                              <span className="flex items-center gap-1 text-emerald-200">
+                                <Clock className="w-3 h-3" />
+                                מוכן להפעלה מיידית
                               </span>
                             )}
                             {sound.is_playing && (
@@ -455,6 +496,11 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
                                 מתנגן עכשיו
                               </span>
                             )}
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                            <span className="px-2 py-1 rounded-full bg-slate-800/70 border border-slate-700">
+                              תזמון הבא: {nextPlayTimeLabel}
+                            </span>
                           </div>
                         </div>
                       </div>

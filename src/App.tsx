@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Settings, SlidersHorizontal } from 'lucide-react';
 import { AudioSystem } from './components/AudioSystem';
 import { InputPage } from './components/InputPage';
@@ -7,7 +7,26 @@ import { LoginPage } from './components/LoginPage';
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [activePage, setActivePage] = useState<'system' | 'input'>('system');
+  const [activePage, setActivePage] = useState<'system' | 'input'>(() =>
+    window.location.pathname.endsWith('/record') ? 'input' : 'system',
+  );
+
+  useEffect(() => {
+    const desiredPath = activePage === 'input' ? '/record' : '/';
+
+    if (window.location.pathname !== desiredPath) {
+      window.history.replaceState(null, '', desiredPath);
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActivePage(window.location.pathname.endsWith('/record') ? 'input' : 'system');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
