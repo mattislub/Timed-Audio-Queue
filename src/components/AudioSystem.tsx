@@ -137,6 +137,15 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
     const sound = sounds.find(s => s.id === soundId);
     if (!sound || sound.is_playing || sound.plays_completed >= sound.total_plays) return;
 
+    const nextPlayTime = new Date(sound.next_play_at).getTime();
+    if (Date.now() < nextPlayTime) {
+      const waitSeconds = Math.ceil((nextPlayTime - Date.now()) / 1000);
+      addDebugLog(
+        `ניסיון הפעלה נדחה עבור ${sound.file_name}. יש להמתין עוד ${waitSeconds} שניות כדי לשמור על מרווח של 30 שניות בין השמעות`,
+      );
+      return;
+    }
+
     if (!sound.file_url) {
       setLoadError('קובץ השמע לא נמצא. נסו להעלות מחדש.');
       addDebugLog(`הפעלה נכשלה: חסר קובץ שמע עבור ${sound.file_name}`);
@@ -448,8 +457,9 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
             <div className="text-center py-12 text-slate-400 bg-slate-900/60 border border-slate-800 rounded-xl">אין עדיין קבצי שמע במערכת</div>
           ) : (
             sounds.map(sound => {
-              const isReady = !sound.is_playing && sound.plays_completed < sound.total_plays;
+              const isEligible = !sound.is_playing && sound.plays_completed < sound.total_plays;
               const countdown = timeUntilNextPlay[sound.id] || 0;
+              const isReadyForPlayback = isEligible && countdown === 0;
               const nextPlayTimeLabel = new Date(sound.next_play_at).toLocaleTimeString('he-IL', {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -480,13 +490,13 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
                           </div>
                           <div className="flex flex-wrap gap-3 items-center text-sm text-slate-300">
                             <span className="px-2 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs">{sound.plays_completed} / {sound.total_plays} השמעות</span>
-                            {isReady && countdown > 0 && (
+                            {isEligible && countdown > 0 && (
                               <span className="flex items-center gap-1 text-emerald-200">
                                 <Clock className="w-3 h-3" />
                                 השמעה הבאה בעוד {formatCountdown(countdown)}
                               </span>
                             )}
-                            {isReady && countdown === 0 && (
+                            {isReadyForPlayback && (
                               <span className="flex items-center gap-1 text-emerald-200">
                                 <Clock className="w-3 h-3" />
                                 מוכן להפעלה מיידית
@@ -508,7 +518,7 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {isReady && !sound.is_playing && (
+                        {isReadyForPlayback && !sound.is_playing && (
                           <button
                             onClick={() => startPlayback(sound.id)}
                             className="p-2 hover:bg-slate-800 rounded-lg text-emerald-300 hover:text-emerald-200 transition"
