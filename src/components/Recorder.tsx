@@ -1,13 +1,67 @@
-import { useState, useRef } from 'react';
-import { Mic, Square, Trash2 } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Mic, Square, Trash2, Clock } from 'lucide-react';
 
 interface RecorderProps {
   onUpload: (file: File, fileName: string) => void;
   isUploading: boolean;
 }
 
+const MAX_RECORDING_DURATION = 60;
+
+const encodeWav = (samples: Float32Array[], sampleRate: number) => {
+  if (!samples.length) return new Blob();
+
+  const totalLength = samples.reduce((sum, arr) => sum + arr.length, 0);
+  const buffer = new ArrayBuffer(44 + totalLength * 2);
+  const view = new DataView(buffer);
+  const channelData = new Float32Array(totalLength);
+  let offset = 0;
+  samples.forEach(chunk => {
+    channelData.set(chunk, offset);
+    offset += chunk.length;
+  });
+
+  const writeString = (viewObj: DataView, offsetIdx: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      viewObj.setUint8(offsetIdx + i, str.charCodeAt(i));
+    }
+  };
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + channelData.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, channelData.length * 2, true);
+
+  let idx = 44;
+  for (let i = 0; i < channelData.length; i++, idx += 2) {
+    const s = Math.max(-1, Math.min(1, channelData[i]));
+    view.setInt16(idx, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  return new Blob([view], { type: 'audio/wav' });
+};
+
+const formatTime = (seconds: number) => {
+  const clamped = Math.max(0, seconds);
+  const mins = Math.floor(clamped / 60)
+    .toString()
+    .padStart(2, '0');
+  const secs = (clamped % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+};
+
 export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimeLeft, setRecordingTimeLeft] = useState(MAX_RECORDING_DURATION);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const recordingFileNameRef = useRef<string>('');
@@ -17,48 +71,6 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const pcmDataRef = useRef<Float32Array[]>([]);
   const sampleRateRef = useRef<number>(44100);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-
-  const encodeWav = (samples: Float32Array[], sampleRate: number) => {
-    if (!samples.length) return new Blob();
-
-    const totalLength = samples.reduce((sum, arr) => sum + arr.length, 0);
-    const buffer = new ArrayBuffer(44 + totalLength * 2);
-    const view = new DataView(buffer);
-    const channelData = new Float32Array(totalLength);
-    let offset = 0;
-    samples.forEach(chunk => {
-      channelData.set(chunk, offset);
-      offset += chunk.length;
-    });
-
-    const writeString = (viewObj: DataView, offsetIdx: number, str: string) => {
-      for (let i = 0; i < str.length; i++) {
-        viewObj.setUint8(offsetIdx + i, str.charCodeAt(i));
-      }
-    };
-
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + channelData.length * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, channelData.length * 2, true);
-
-    let idx = 44;
-    for (let i = 0; i < channelData.length; i++, idx += 2) {
-      const s = Math.max(-1, Math.min(1, channelData[i]));
-      view.setInt16(idx, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-
-    return new Blob([view], { type: 'audio/wav' });
-  };
 
   const startRecording = async () => {
     try {
@@ -87,12 +99,13 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
       recordingFileNameRef.current = `recording-${Date.now()}.wav`;
 
       setIsRecording(true);
+      setRecordingTimeLeft(MAX_RECORDING_DURATION);
     } catch (err) {
       alert('Cannot access microphone: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     if (!isRecording) return;
 
     if (processorNodeRef.current) {
@@ -112,6 +125,7 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
     if (!pcmDataRef.current.length) {
       alert('לא נקלטו נתונים מהמיקרופון. נסה שוב.');
       setIsRecording(false);
+      setRecordingTimeLeft(MAX_RECORDING_DURATION);
       return;
     }
 
@@ -124,7 +138,24 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
     recordingFileNameRef.current = '';
     pcmDataRef.current = [];
     setIsRecording(false);
-  };
+    setRecordingTimeLeft(MAX_RECORDING_DURATION);
+  }, [isRecording, onUpload]);
+
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const interval = window.setInterval(() => {
+      setRecordingTimeLeft(prev => {
+        if (prev <= 1) {
+          window.setTimeout(() => stopRecording(), 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isRecording, stopRecording]);
 
   const clearRecording = () => {
     setRecordedBlob(null);
@@ -139,7 +170,7 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
       <h3 className="text-lg font-semibold text-white mb-4">Record Audio</h3>
 
       <div className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           {!isRecording && !recordedBlob && (
             <button
               onClick={startRecording}
@@ -155,6 +186,10 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
               <div className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg">
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                 Recording...
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 text-slate-100 text-sm">
+                <Clock className="w-4 h-4 text-emerald-300" />
+                {`זמן נותר: ${formatTime(recordingTimeLeft)}`}
               </div>
               <button
                 onClick={stopRecording}
