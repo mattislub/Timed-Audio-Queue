@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Settings, SlidersHorizontal } from 'lucide-react';
 import { AudioSystem } from './components/AudioSystem';
+import { InputPage } from './components/InputPage';
 import { LoginPage } from './components/LoginPage';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [activePage, setActivePage] = useState<'system' | 'input'>('system');
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -32,7 +34,13 @@ function App() {
       </header>
 
       <main className="relative max-w-6xl mx-auto px-6 py-10">
-        {!isAuthenticated ? <LoginPage onLogin={() => setIsAuthenticated(true)} /> : <AudioSystem />}
+        {!isAuthenticated ? (
+          <LoginPage onLogin={() => setIsAuthenticated(true)} />
+        ) : activePage === 'input' ? (
+          <InputPage onBack={() => setActivePage('system')} />
+        ) : (
+          <AudioSystem onNavigateToInput={() => setActivePage('input')} />
+        )}
       </main>
 
       {showSettings && (
