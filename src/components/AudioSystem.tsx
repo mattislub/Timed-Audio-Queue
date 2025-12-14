@@ -133,8 +133,8 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
     setTimeUntilNextPlay(newCountdowns);
   }, [sounds]);
 
-  const startPlayback = useCallback(async (soundId: string) => {
-    const sound = sounds.find(s => s.id === soundId);
+  const startPlayback = useCallback(async (soundId: string, freshSound?: Sound) => {
+    const sound = freshSound ?? sounds.find(s => s.id === soundId);
     if (!sound || sound.is_playing || sound.plays_completed >= sound.total_plays) return;
 
     const nextPlayTime = new Date(sound.next_play_at).getTime();
@@ -165,7 +165,10 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
       return;
     }
 
-    const speeds = playbackSpeeds[soundId] || ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
+    const speeds =
+      playbackSpeeds[soundId] ||
+      freshSound?.playback_speeds ||
+      ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0'];
     const currentSpeed = parseFloat(speeds[sound.plays_completed] || '1.0');
 
     addDebugLog(`מנסה להפעיל ${sound.file_name} (${sound.id}) במהירות ${currentSpeed}x`);
@@ -217,7 +220,7 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
           const nextPlayTime = new Date(sound.next_play_at).getTime();
 
           if (now >= nextPlayTime && !currentlyPlaying) {
-            await startPlayback(sound.id);
+            await startPlayback(sound.id, sound);
             break;
           }
         }
