@@ -63,7 +63,6 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTimeLeft, setRecordingTimeLeft] = useState(MAX_RECORDING_DURATION);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const recordingFileNameRef = useRef<string>('');
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -160,9 +159,6 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
   const clearRecording = () => {
     setRecordedBlob(null);
     recordingFileNameRef.current = '';
-    if (audioRef.current) {
-      audioRef.current.src = '';
-    }
   };
 
   return (
@@ -204,14 +200,9 @@ export function Recorder({ onUpload, isUploading }: RecorderProps) {
 
         {recordedBlob && (
           <div className="space-y-3">
-            <div className="bg-slate-700 rounded p-3">
-              <p className="text-sm text-slate-300 mb-2">Preview:</p>
-              <audio
-                ref={audioRef}
-                src={URL.createObjectURL(recordedBlob)}
-                controls
-                className="w-full"
-              />
+            <div className="bg-slate-700 rounded p-3 space-y-2">
+              <p className="text-sm text-slate-300">ההקלטה נשמרה בהצלחה.</p>
+              <p className="text-xs text-slate-400">לא ניתן להשמיע תצוגה מקדימה כאן, ההקלטה תופיע בדף הראשי לאחר העיבוד.</p>
             </div>
 
             <p className="text-xs text-slate-300">ההקלטה נשלחת אוטומטית בעת עצירה. אפשר לנקות את התצוגה כאן:</p>
