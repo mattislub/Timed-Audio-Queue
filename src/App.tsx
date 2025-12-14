@@ -1,106 +1,79 @@
-import { useEffect, useState } from 'react';
-import { Settings, SlidersHorizontal } from 'lucide-react';
-import { AudioSystem } from './components/AudioSystem';
-import { InputPage } from './components/InputPage';
-import { LoginPage } from './components/LoginPage';
+import { useMemo, useState } from 'react';
+import { ListMusic, Mic2 } from 'lucide-react';
+import Recorder from './components/Recorder';
+import Playlist from './components/Playlist';
+
+export type Recording = {
+  id: string;
+  name: string;
+  url: string;
+  blob: Blob;
+  createdAt: number;
+};
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [activePage, setActivePage] = useState<'system' | 'input'>(() =>
-    window.location.pathname.endsWith('/record') ? 'input' : 'system',
-  );
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [activePage, setActivePage] = useState<'record' | 'playlist'>('record');
 
-  useEffect(() => {
-    const desiredPath = activePage === 'input' ? '/record' : '/';
+  const handleNewRecording = (recording: Recording) => {
+    setRecordings(prev => [recording, ...prev]);
+    setActivePage('playlist');
+  };
 
-    if (window.location.pathname !== desiredPath) {
-      window.history.replaceState(null, '', desiredPath);
-    }
+  const subtitle = useMemo(() => {
+    return activePage === 'record'
+      ? 'דף מיוחד להקלטות'
+      : 'רשימת השמעה אוטומטית אחרי כל הקלטה';
   }, [activePage]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setActivePage(window.location.pathname.endsWith('/record') ? 'input' : 'system');
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-indigo-500/10 to-transparent blur-3xl" aria-hidden="true" />
-      <header className="sticky top-0 z-20 backdrop-blur bg-slate-950/80 border-b border-slate-900/80">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-slate-900 bg-slate-900/60 backdrop-blur sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-              <SlidersHorizontal className="w-5 h-5" />
+            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+              <Mic2 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-emerald-200 uppercase tracking-widest">Timed Audio Queue</p>
-              <h1 className="text-xl font-semibold">ניהול השמעות ושליטה בקצב</h1>
+              <p className="text-xs text-emerald-200 uppercase tracking-[0.2em]">Timed Audio Queue</p>
+              <h1 className="text-xl font-semibold">ניהול הקלטה והשמעות חוזרות</h1>
+              <p className="text-sm text-slate-400">{subtitle}</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-800 bg-slate-900/70 hover:border-emerald-500 hover:text-emerald-300 transition"
-          >
-            <Settings className="w-4 h-4" />
-            הגדרות
-          </button>
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => setActivePage('record')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition ${
+                activePage === 'record'
+                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-emerald-400/50'
+              }`}
+            >
+              <Mic2 className="w-4 h-4" />
+              הקלטה
+            </button>
+            <button
+              onClick={() => setActivePage('playlist')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition ${
+                activePage === 'playlist'
+                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-emerald-400/50'
+              }`}
+            >
+              <ListMusic className="w-4 h-4" />
+              רשימת השמעה
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="relative max-w-6xl mx-auto px-6 py-10">
-        {!isAuthenticated ? (
-          <LoginPage onLogin={() => setIsAuthenticated(true)} />
-        ) : activePage === 'input' ? (
-          <InputPage onBack={() => setActivePage('system')} />
+      <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
+        {activePage === 'record' ? (
+          <Recorder onRecordingReady={handleNewRecording} />
         ) : (
-          <AudioSystem onNavigateToInput={() => setActivePage('input')} />
+          <Playlist recordings={recordings} />
         )}
       </main>
-
-      {showSettings && (
-        <div className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">ניהול חוויה</p>
-                <h2 className="text-xl font-semibold">הגדרות כלליות</h2>
-              </div>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="text-slate-400 hover:text-white transition"
-                aria-label="סגור הגדרות"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-3 text-slate-300 text-sm">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/60">
-                <span>התראות על סיום השמעה</span>
-                <button className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs">
-                  פעיל
-                </button>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/60">
-                <span>מצב נגישות גבוה</span>
-                <button className="px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-slate-200 text-xs hover:border-emerald-400 transition">
-                  כבוי
-                </button>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/60">
-                <span>הפעלת רקע דינאמי</span>
-                <button className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs">
-                  פעיל
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
