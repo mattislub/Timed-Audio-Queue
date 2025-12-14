@@ -18,6 +18,7 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playbackTimeoutRef = useRef<number | null>(null);
 
   const formatCountdown = (totalSeconds: number) => {
     const clamped = Math.max(0, totalSeconds);
@@ -201,6 +202,50 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
     }
   }, [addDebugLog, getSecureAudioUrl, isSourceSupported, playbackSpeeds, sounds, waitForAudioReady]);
 
+  const clearScheduledPlayback = useCallback(() => {
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+  }, []);
+
+  const schedulePlaybackWithTimer = useCallback(() => {
+    clearScheduledPlayback();
+
+    if (currentlyPlaying) return;
+
+    const eligibleSounds = sounds.filter(
+      sound => !sound.is_playing && sound.plays_completed < sound.total_plays && sound.next_play_at,
+    );
+
+    if (eligibleSounds.length === 0) return;
+
+    const now = Date.now();
+    const readySound = eligibleSounds.find(sound => new Date(sound.next_play_at).getTime() <= now);
+
+    if (readySound) {
+      addDebugLog(`קיים קובץ מוכן להשמעה מיידית (${readySound.file_name}). מפעיל כעת.`);
+      startPlayback(readySound.id);
+      return;
+    }
+
+    const nextSound = eligibleSounds.reduce((earliest, current) => {
+      const earliestTime = new Date(earliest.next_play_at).getTime();
+      const currentTime = new Date(current.next_play_at).getTime();
+      return currentTime < earliestTime ? current : earliest;
+    });
+
+    const waitMs = Math.max(0, new Date(nextSound.next_play_at).getTime() - now);
+
+    playbackTimeoutRef.current = window.setTimeout(() => {
+      addDebugLog(`מפעיל אוטומטית את ${nextSound.file_name} לאחר המתנה מתוזמנת.`);
+      startPlayback(nextSound.id);
+    }, waitMs);
+
+    const waitSeconds = Math.ceil(waitMs / 1000);
+    addDebugLog(`תוזמנה הפעלה אוטומטית עבור ${nextSound.file_name} בעוד ${waitSeconds} שניות`);
+  }, [addDebugLog, clearScheduledPlayback, currentlyPlaying, sounds, startPlayback]);
+
   const loadSounds = useCallback(async () => {
     try {
       addDebugLog('טוען רשימת קבצי שמע מהשרת');
@@ -314,6 +359,11 @@ export function AudioSystem({ onNavigateToInput }: AudioSystemProps) {
     const interval = setInterval(loadSounds, 1000);
     return () => clearInterval(interval);
   }, [loadSounds]);
+
+  useEffect(() => {
+    schedulePlaybackWithTimer();
+    return clearScheduledPlayback;
+  }, [clearScheduledPlayback, schedulePlaybackWithTimer]);
 
   useEffect(() => {
     if (currentlyPlaying && audioRef.current) {
