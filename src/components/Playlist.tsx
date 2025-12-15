@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
-import type { Recording } from '../App';
+import type { AppSettings, Recording } from '../App';
 
 type PlaylistProps = {
   recordings: Recording[];
+  settings: AppSettings;
 };
 
 type PlaylistItem = Recording & {
@@ -14,9 +15,8 @@ type PlaylistItem = Recording & {
 };
 
 const TOTAL_PLAYS = 6;
-const GAP_MS = 30_000;
 
-function Playlist({ recordings }: PlaylistProps) {
+function Playlist({ recordings, settings }: PlaylistProps) {
   const [items, setItems] = useState<PlaylistItem[]>([]);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const timersRef = useRef<Record<string, number | undefined>>({});
@@ -36,6 +36,10 @@ function Playlist({ recordings }: PlaylistProps) {
   };
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
   const playbackQueueRef = useRef<string[]>([]);
+  const previousGapRef = useRef<number>(settings.gapSeconds * 1000);
+
+  const gapMs = Math.max(0, settings.gapSeconds * 1000);
+  const playbackRate = settings.playbackRate;
 
   const enqueuePlayback = (id: string) => {
     if (playbackQueueRef.current.includes(id)) return;
@@ -97,6 +101,7 @@ function Playlist({ recordings }: PlaylistProps) {
     const existingAudio = audiosRef.current[id];
     const audio = existingAudio ?? new Audio(currentItem.url);
     audio.currentTime = 0;
+    audio.playbackRate = playbackRate;
     audiosRef.current[id] = audio;
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
@@ -196,6 +201,22 @@ function Playlist({ recordings }: PlaylistProps) {
   }, [retryPendingAutoplay]);
 
   useEffect(() => {
+    if (previousGapRef.current !== gapMs) {
+      Object.values(timersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
+      Object.values(retryTimersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
+      Object.values(audiosRef.current).forEach(audio => audio?.pause());
+      timersRef.current = {};
+      retryTimersRef.current = {};
+      audiosRef.current = {};
+      pendingAutoplayRef.current.clear();
+      playbackQueueRef.current = [];
+      scheduledRecordingsRef.current.clear();
+      updateItems(() => []);
+      previousGapRef.current = gapMs;
+    }
+  }, [gapMs]);
+
+  useEffect(() => {
     recordings.forEach(recording => {
       if (scheduledRecordingsRef.current.has(recording.id)) return;
 
@@ -205,7 +226,7 @@ function Playlist({ recordings }: PlaylistProps) {
       Array.from({ length: TOTAL_PLAYS }).forEach((_, index) => {
         const playNumber = index + 1;
         const playId = `${recording.id}-play-${playNumber}`;
-        const scheduledAt = baseTime + index * GAP_MS;
+        const scheduledAt = baseTime + index * gapMs;
         const delay = Math.max(0, scheduledAt - Date.now());
 
         const newItem: PlaylistItem = {
@@ -230,7 +251,7 @@ function Playlist({ recordings }: PlaylistProps) {
 
       attemptAutoplayUnlock();
     });
-  }, [attemptAutoplayUnlock, recordings]);
+  }, [attemptAutoplayUnlock, gapMs, recordings]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -278,10 +299,13 @@ function Playlist({ recordings }: PlaylistProps) {
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-emerald-200">רשימת השמעה</p>
-          <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות בהפרש של 30 שניות</h2>
+          <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות בהפרש של {settings.gapSeconds} שניות</h2>
           <p className="text-sm text-slate-400">כל ההשמעות מתוזמנות מראש ומופעלות אוטומטית כשהזמן שלהן מגיע, ללא צורך בלחיצה נוספת.</p>
         </div>
-        <div className="text-sm text-slate-400">סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
+        <div className="text-sm text-slate-400 text-right space-y-1">
+          <div>סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
+          <div className="text-xs text-emerald-200">מהירות השמעה: {playbackRate.toFixed(2)}x</div>
+        </div>
       </div>
 
       {sortedItems.length === 0 ? (
