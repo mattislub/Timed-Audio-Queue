@@ -76,6 +76,120 @@ type RecordingError = {
   message: string;
 };
 
+async function encodeWithMediaRecorder(audioBuffer: AudioBuffer, mimeType: string) {
+  const context = new AudioContext({ sampleRate: audioBuffer.sampleRate });
+  const destination = context.createMediaStreamDestination();
+  const source = context.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(destination);
+
+  const chunks: BlobPart[] = [];
+
+  return new Promise<Blob>((resolve, reject) => {
+    const recorder = new MediaRecorder(destination.stream, { mimeType });
+
+    recorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onerror = event => {
+      reject(event.error ?? new Error('שגיאה במהלך המרת הקובץ ל-OGG'));
+    };
+
+    recorder.onstop = () => {
+      resolve(new Blob(chunks, { type: mimeType }));
+      source.disconnect();
+      destination.disconnect();
+      context.close().catch(() => undefined);
+    };
+
+    source.onended = () => {
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    };
+
+    recorder.start();
+    source.start();
+  });
+}
+
+function interleaveChannels(channels: Float32Array[]) {
+  const totalLength = channels[0].length * channels.length;
+  const result = new Float32Array(totalLength);
+  let offset = 0;
+
+  for (let i = 0; i < channels[0].length; i += 1) {
+    for (let channel = 0; channel < channels.length; channel += 1) {
+      result[offset] = channels[channel][i];
+      offset += 1;
+    }
+  }
+
+  return result;
+}
+
+function floatTo16BitPCM(output: DataView, offset: number, input: Float32Array) {
+  for (let i = 0; i < input.length; i += 1, offset += 2) {
+    let sample = input[i];
+    sample = Math.max(-1, Math.min(1, sample));
+    output.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i += 1) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+function audioBufferToWav(audioBuffer: AudioBuffer) {
+  const channelData: Float32Array[] = [];
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+    channelData.push(audioBuffer.getChannelData(channel));
+  }
+
+  const interleaved = interleaveChannels(channelData);
+  const buffer = new ArrayBuffer(44 + interleaved.length * 2);
+  const view = new DataView(buffer);
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + interleaved.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, audioBuffer.numberOfChannels, true);
+  view.setUint32(24, audioBuffer.sampleRate, true);
+  view.setUint32(28, audioBuffer.sampleRate * audioBuffer.numberOfChannels * 2, true);
+  view.setUint16(32, audioBuffer.numberOfChannels * 2, true);
+  view.setUint16(34, 16, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, interleaved.length * 2, true);
+
+  floatTo16BitPCM(view, 44, interleaved);
+  return buffer;
+}
+
+async function convertWebmToPlayable(blob: Blob) {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new AudioContext();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  await audioContext.close();
+
+  const oggMime = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : null;
+
+  if (oggMime) {
+    const oggBlob = await encodeWithMediaRecorder(audioBuffer, oggMime);
+    return { blob: oggBlob, extension: 'ogg' };
+  }
+
+  const wavBuffer = audioBufferToWav(audioBuffer);
+  return { blob: new Blob([wavBuffer], { type: 'audio/wav' }), extension: 'wav' };
+}
+
 async function createSoundRecord(fileName: string, publicUrl: string, playbackRates: number[]) {
   const requestUrl = buildApiUrl('/sounds');
   console.info('[Recorder] Creating sound record', { requestUrl, fileName });
@@ -108,10 +222,11 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
   const [error, setError] = useState<RecordingError | null>(null);
   const [selectedMimeType, setSelectedMimeType] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
 
-  const supportedMimeType = useMemo(() => {
+  const preferredMimeType = useMemo(() => {
     const available = NON_WEBM_TYPES.find(type => MediaRecorder.isTypeSupported(type));
-    return available ?? null;
+    return available ?? 'audio/webm';
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -125,19 +240,11 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
       return;
     }
 
-    if (!supportedMimeType) {
-      setError({
-        title: 'לא ניתן להתחיל הקלטה',
-        message: 'הדפדפן תומך רק ב-WebM. הקלטה תתבצע רק כאשר קיימת תמיכה בפורמטים אחרים.',
-      });
-      return;
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: supportedMimeType });
+      const recorder = new MediaRecorder(stream, { mimeType: preferredMimeType });
       mediaRecorderRef.current = recorder;
-      setSelectedMimeType(supportedMimeType);
+      setSelectedMimeType(preferredMimeType);
       chunksRef.current = [];
 
       recorder.ondataavailable = event => {
@@ -147,23 +254,40 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
       };
 
       recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: selectedMimeType ?? supportedMimeType });
+        const blob = new Blob(chunksRef.current, { type: selectedMimeType ?? preferredMimeType });
         chunksRef.current = [];
-
-        if (!blob.type || blob.type.includes('webm')) {
-          setError({
-            title: 'הקלטה נדחתה',
-            message: 'נמנענו מלשמור קובץ בפורמט WebM. נסו שנית בדפדפן תומך.',
-          });
-          return;
-        }
 
         const extensionMap: Record<string, string> = {
           'audio/mpeg': 'mp3',
           'audio/ogg': 'ogg',
+          'audio/wav': 'wav',
         };
 
-        const extension = extensionMap[blob.type] ?? blob.type.split('/')[1] ?? 'audio';
+        let finalBlob = blob;
+        let extension = extensionMap[blob.type] ?? blob.type.split('/')[1] ?? 'audio';
+
+        if (blob.type.includes('webm')) {
+          try {
+            setIsConverting(true);
+            const conversionResult = await convertWebmToPlayable(blob);
+            finalBlob = conversionResult.blob;
+            extension = conversionResult.extension;
+          } catch (conversionError) {
+            console.error('Failed to convert WebM to playable format', conversionError);
+            setError({
+              title: 'המרת WebM נכשלה',
+              message:
+                conversionError instanceof Error
+                  ? conversionError.message
+                  : 'לא ניתן היה להמיר את הקובץ. נסו שנית או בדקו הרשאות.',
+            });
+            setIsConverting(false);
+            return;
+          } finally {
+            setIsConverting(false);
+          }
+        }
+
         const timestamp = new Date()
           .toISOString()
           .replace(/[-:]/g, '')
@@ -173,7 +297,7 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
         try {
           setIsUploading(true);
-          const publicUrl = await uploadRecording(blob, fileName);
+          const publicUrl = await uploadRecording(finalBlob, fileName);
           const playbackRates = settings.repeatSettings.map(repeat => repeat.playbackRate);
           await createSoundRecord(fileName, publicUrl, playbackRates);
           onRecordingSaved();
@@ -197,10 +321,10 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
       console.error('Recording failed', err);
       setError({
         title: 'שגיאה בהפעלת המיקרופון',
-        message: 'בדקו הרשאות מיקרופון ונסו שוב. ודאו שהפורמט אינו WebM.',
+        message: 'בדקו הרשאות מיקרופון ונסו שוב. נבצע המרה אוטומטית אם יוקלט WebM.',
       });
     }
-  }, [onRecordingSaved, selectedMimeType, supportedMimeType, settings.repeatSettings]);
+  }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings]);
 
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -218,9 +342,9 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     };
   }, [stopRecording]);
 
-  const supportedMessage = supportedMimeType
-    ? `הקלטה תשמר בפורמט ${supportedMimeType.replace('audio/', '').toUpperCase()}`
-    : 'אין תמיכה בפורמט שאינו WebM בדפדפן הנוכחי';
+  const supportedMessage = preferredMimeType
+    ? `הקלטה תשמר בפורמט ${preferredMimeType.replace('audio/', '').toUpperCase()}. אם תוקלט WebM נבצע המרה אוטומטית.`
+    : 'אין תמיכה בפורמט הקלטה מתאים בדפדפן הנוכחי';
 
   return (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -267,7 +391,9 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
             ? 'מקליט עכשיו...'
             : isUploading
               ? 'שולח את הקובץ לשרת, אנא המתן לסיום ההעלאה.'
-              : 'מוכן להקלטה חדשה'}
+              : isConverting
+                ? 'ממיר את הקובץ לפורמט נתמך...'
+                : 'מוכן להקלטה חדשה'}
         </div>
       </div>
 
