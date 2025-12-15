@@ -68,11 +68,12 @@ function App() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
-        {activePage === 'record' ? (
+        <div className={activePage === 'record' ? 'block' : 'hidden'} aria-hidden={activePage !== 'record'}>
           <Recorder onRecordingReady={handleNewRecording} />
-        ) : (
+        </div>
+        <div className={activePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={activePage !== 'playlist'}>
           <Playlist recordings={recordings} />
-        )}
+        </div>
       </main>
     </div>
   );
