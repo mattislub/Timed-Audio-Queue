@@ -5,6 +5,15 @@ import type { AppSettings, Recording } from '../App';
 const NON_WEBM_TYPES = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
+function buildApiUrl(path: string) {
+  if (!API_BASE_URL) return '';
+
+  const trimmed = API_BASE_URL.replace(/\/$/, '');
+  const baseWithApi = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+
+  return `${baseWithApi}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 const blobToBase64 = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -19,7 +28,7 @@ async function uploadRecording(blob: Blob, fileName: string) {
   }
 
   const fileContent = await blobToBase64(blob);
-  const requestUrl = `${API_BASE_URL.replace(/\/$/, '')}/sounds/upload/base64`;
+  const requestUrl = buildApiUrl('/sounds/upload/base64');
 
   console.info('[Recorder] Starting upload', {
     url: requestUrl,
