@@ -52,52 +52,84 @@ function Settings({ settings, onChange }: SettingsProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid gap-3 lg:grid-cols-2">
-          {repeatSettings.map((repeat, index) => (
-            <div key={index} className="space-y-3 bg-slate-800/60 border border-slate-800 rounded-xl p-4">
-              <div className="flex items-center justify-between text-sm text-slate-300">
-                <span className="font-semibold text-emerald-200">השמעה {index + 1}</span>
-                <span className="text-xs text-slate-500">מרחק עד השמעה זו</span>
-              </div>
-
-              <label className="flex flex-col gap-2">
-                <span className="text-sm text-slate-300">הפרש בשניות עד השמעה {index + 1}</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={repeat.gapSeconds}
-                  onChange={event => {
-                    const next = [...repeatSettings];
-                    next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
-                    setRepeatSettings(next);
-                  }}
-                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <span className="text-sm text-slate-300">מהירות השמעה</span>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3}
-                  step={0.1}
-                  value={repeat.playbackRate}
-                  onChange={event => {
-                    const next = [...repeatSettings];
-                    next[index] = { ...repeat, playbackRate: Number(event.target.value) };
-                    setRepeatSettings(next);
-                  }}
-                  className="accent-emerald-500"
-                />
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>0.5x</span>
-                  <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
-                  <span>3x</span>
-                </div>
-              </label>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/40 shadow-inner">
+          <table className="min-w-full text-sm text-slate-300">
+            <thead className="bg-slate-800/70 text-slate-100 text-xs uppercase tracking-wider">
+              <tr>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">
+                  השמעה
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">
+                  הפרש בשניות
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">
+                  מהירות השמעה
+                </th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">
+                  תוצאה משוערת
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {repeatSettings.map((repeat, index) => (
+                <tr key={index} className="hover:bg-slate-800/40 transition-colors">
+                  <td className="px-4 py-4 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-base font-semibold text-emerald-200">השמעה {index + 1}</span>
+                      <span className="text-xs text-slate-500">מרחק עד השמעה זו</span>
+                      <span className="text-xs text-slate-400">T+{nextPlayTimes[index]}s</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-xs text-slate-400">הפרש בשניות עד השמעה {index + 1}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={repeat.gapSeconds}
+                        onChange={event => {
+                          const next = [...repeatSettings];
+                          next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
+                          setRepeatSettings(next);
+                        }}
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
+                      />
+                    </label>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <label className="flex flex-col gap-3">
+                      <span className="text-xs text-slate-400">בחירת מהירות</span>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={3}
+                        step={0.1}
+                        value={repeat.playbackRate}
+                        onChange={event => {
+                          const next = [...repeatSettings];
+                          next[index] = { ...repeat, playbackRate: Number(event.target.value) };
+                          setRepeatSettings(next);
+                        }}
+                        className="accent-emerald-500"
+                      />
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>0.5x</span>
+                        <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
+                        <span>3x</span>
+                      </div>
+                    </label>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                      <span className="text-emerald-200 font-semibold">T+{nextPlayTimes[index]}s</span>
+                      <span className="text-slate-500">|</span>
+                      <span>{repeat.playbackRate.toFixed(1)}x</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
