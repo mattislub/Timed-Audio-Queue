@@ -43,6 +43,7 @@ async function fetchRecordings() {
     return [];
   }
 
+  const clientNow = Date.now();
   const data = (await response.json()) as Array<{
     id: string;
     file_name: string;
@@ -52,7 +53,14 @@ async function fetchRecordings() {
 
   const serverNowHeader = response.headers.get('date');
   const serverNow = serverNowHeader ? new Date(serverNowHeader).getTime() : undefined;
-  const now = serverNow ?? Date.now();
+  const now = serverNow ?? clientNow;
+
+  console.info('[Clock]', {
+    source: serverNow ? 'server' : 'client',
+    serverNow,
+    clientNow,
+    offsetMs: serverNow ? serverNow - clientNow : 0,
+  });
 
   return {
     recordings: data
