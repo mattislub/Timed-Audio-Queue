@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
 import type { Recording } from '../App';
 
@@ -22,6 +22,8 @@ function Playlist({ recordings }: PlaylistProps) {
   const audiosRef = useRef<Record<string, HTMLAudioElement | null>>({});
   const itemsRef = useRef<PlaylistItem[]>([]);
   const scheduledRecordingsRef = useRef<Set<string>>(new Set());
+  const pendingAutoplayRef = useRef<Set<string>>(new Set());
+  const autoplayUnlockedRef = useRef(false);
 
   const updateItems = (updater: (prev: PlaylistItem[]) => PlaylistItem[]) => {
     setItems(prev => {
@@ -44,11 +46,15 @@ function Playlist({ recordings }: PlaylistProps) {
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing' } : item)));
 
-    const handleError = (message: string) => {
+    const handleError = (message: string, shouldQueueAutoplay = false) => {
       audiosRef.current[id] = null;
       updateItems(prev =>
         prev.map(item => (item.id === id ? { ...item, status: 'error', errorMessage: message } : item)),
       );
+
+      if (shouldQueueAutoplay) {
+        pendingAutoplayRef.current.add(id);
+      }
     };
 
     audio.onended = () => {
@@ -65,7 +71,8 @@ function Playlist({ recordings }: PlaylistProps) {
       handleError(
         manualTrigger
           ? 'ההשמעה נכשלה. נסו שוב.'
-          : 'הדפדפן חסם השמעה אוטומטית. לחצו על "נגן עכשיו" כדי להתחיל.',
+          : 'הדפדפן חסם השמעה אוטומטית. ננסה שוב לאחר אישור ראשוני.',
+        !manualTrigger,
       );
     }
   };
@@ -73,6 +80,23 @@ function Playlist({ recordings }: PlaylistProps) {
   const retryPlay = (id: string) => {
     playOnce(id, true);
   };
+
+  const retryPendingAutoplay = useCallback(() => {
+    const pending = Array.from(pendingAutoplayRef.current);
+    pendingAutoplayRef.current.clear();
+    pending.forEach(pendingId => playOnce(pendingId, true));
+  }, []);
+
+  const attemptAutoplayUnlock = useCallback(() => {
+    if (autoplayUnlockedRef.current) return;
+
+    autoplayUnlockedRef.current = true;
+    const silentAudio = new Audio();
+    silentAudio.muted = true;
+    silentAudio.play().catch(() => undefined).finally(() => {
+      retryPendingAutoplay();
+    });
+  }, [retryPendingAutoplay]);
 
   useEffect(() => {
     recordings.forEach(recording => {
@@ -112,6 +136,17 @@ function Playlist({ recordings }: PlaylistProps) {
     },
     [],
   );
+
+  useEffect(() => {
+    const unlockHandler = () => attemptAutoplayUnlock();
+    window.addEventListener('pointerdown', unlockHandler, { once: true });
+    window.addEventListener('keydown', unlockHandler, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockHandler);
+      window.removeEventListener('keydown', unlockHandler);
+    };
+  }, [attemptAutoplayUnlock]);
 
   return (
     <section className="space-y-4">
