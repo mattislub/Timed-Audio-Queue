@@ -19,7 +19,16 @@ async function uploadRecording(blob: Blob, fileName: string) {
   }
 
   const fileContent = await blobToBase64(blob);
-  const response = await fetch(`${API_BASE_URL.replace(/\/$/, '')}/sounds/upload/base64`, {
+  const requestUrl = `${API_BASE_URL.replace(/\/$/, '')}/sounds/upload/base64`;
+
+  console.info('[Recorder] Starting upload', {
+    url: requestUrl,
+    fileName,
+    blobType: blob.type,
+    blobSize: blob.size,
+  });
+
+  const response = await fetch(requestUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, fileContent }),
@@ -27,14 +36,24 @@ async function uploadRecording(blob: Blob, fileName: string) {
 
   if (!response.ok) {
     const message = await response.text().catch(() => '');
+
+    console.error('[Recorder] Upload failed', {
+      status: response.status,
+      statusText: response.statusText,
+      url: requestUrl,
+      responseText: message,
+    });
+
     throw new Error(message || 'העלאת הקובץ לשרת נכשלה.');
   }
 
   const data = (await response.json()) as { publicUrl?: string };
   if (!data.publicUrl) {
+    console.error('[Recorder] No publicUrl in upload response', { url: requestUrl, data });
     throw new Error('השרת לא החזיר כתובת ציבורית לקובץ.');
   }
 
+  console.info('[Recorder] Upload succeeded', { url: requestUrl, publicUrl: data.publicUrl });
   return data.publicUrl;
 }
 
