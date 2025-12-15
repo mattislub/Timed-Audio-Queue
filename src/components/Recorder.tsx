@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Circle, StopCircle } from 'lucide-react';
-import type { Recording } from '../App';
+import type { AppSettings, Recording } from '../App';
 
 const NON_WEBM_TYPES = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
 
 type RecorderProps = {
   onRecordingReady: (recording: Recording) => void;
+  settings: AppSettings;
 };
 
 type RecordingError = {
@@ -13,7 +14,7 @@ type RecordingError = {
   message: string;
 };
 
-function Recorder({ onRecordingReady }: RecorderProps) {
+function Recorder({ onRecordingReady, settings }: RecorderProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -116,7 +117,9 @@ function Recorder({ onRecordingReady }: RecorderProps) {
         <div>
           <p className="text-sm text-emerald-200">דף הקלטות</p>
           <h2 className="text-2xl font-semibold">התחילו הקלטה חדשה</h2>
-          <p className="text-sm text-slate-400">הקובץ יוזמן ל-6 השמעות בהפרש של 30 שניות, וכל השמעה תתווסף אוטומטית ברגע שהגיע זמנה.</p>
+          <p className="text-sm text-slate-400">
+            הקובץ יוזמן ל-6 השמעות עם המרווחים והמהירויות שהוגדרו במסך ההגדרות, וכל השמעה תתווסף אוטומטית ברגע שהגיע זמנה.
+          </p>
         </div>
         <div className="text-right text-xs text-slate-400">{supportedMessage}</div>
       </div>

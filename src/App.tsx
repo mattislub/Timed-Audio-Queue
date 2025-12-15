@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ListMusic, Mic2 } from 'lucide-react';
+import { Cog, ListMusic, Mic2 } from 'lucide-react';
 import Recorder from './components/Recorder';
 import Playlist from './components/Playlist';
+import Settings from './components/Settings';
 
 export type Recording = {
   id: string;
@@ -11,9 +12,28 @@ export type Recording = {
   createdAt: number;
 };
 
+export type RepeatSetting = {
+  gapSeconds: number;
+  playbackRate: number;
+};
+
+export type AppSettings = {
+  repeatSettings: RepeatSetting[];
+};
+
 function App() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [activePage, setActivePage] = useState<'record' | 'playlist'>('record');
+  const [activePage, setActivePage] = useState<'record' | 'playlist' | 'settings'>('record');
+  const [settings, setSettings] = useState<AppSettings>({
+    repeatSettings: [
+      { gapSeconds: 0, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+    ],
+  });
 
   const handleNewRecording = (recording: Recording) => {
     setRecordings(prev => [recording, ...prev]);
@@ -21,9 +41,9 @@ function App() {
   };
 
   const subtitle = useMemo(() => {
-    return activePage === 'record'
-      ? 'דף מיוחד להקלטות'
-      : 'רשימת השמעה אוטומטית אחרי כל הקלטה';
+    if (activePage === 'record') return 'דף מיוחד להקלטות';
+    if (activePage === 'playlist') return 'רשימת השמעה אוטומטית אחרי כל הקלטה';
+    return 'התאמה אישית של זמני השמע ומהירות ההשמעה';
   }, [activePage]);
 
   return (
@@ -63,16 +83,30 @@ function App() {
               <ListMusic className="w-4 h-4" />
               רשימת השמעה
             </button>
+            <button
+              onClick={() => setActivePage('settings')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition ${
+                activePage === 'settings'
+                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-emerald-400/50'
+              }`}
+            >
+              <Cog className="w-4 h-4" />
+              הגדרות
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
         <div className={activePage === 'record' ? 'block' : 'hidden'} aria-hidden={activePage !== 'record'}>
-          <Recorder onRecordingReady={handleNewRecording} />
+          <Recorder onRecordingReady={handleNewRecording} settings={settings} />
         </div>
         <div className={activePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={activePage !== 'playlist'}>
-          <Playlist recordings={recordings} />
+          <Playlist recordings={recordings} settings={settings} />
+        </div>
+        <div className={activePage === 'settings' ? 'block' : 'hidden'} aria-hidden={activePage !== 'settings'}>
+          <Settings settings={settings} onChange={setSettings} />
         </div>
       </main>
     </div>
