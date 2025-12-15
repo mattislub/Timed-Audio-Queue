@@ -7,7 +7,7 @@ type PlaylistProps = {
 };
 
 type PlaylistItem = Recording & {
-  status: 'ready' | 'playing' | 'done' | 'error';
+  status: 'scheduled' | 'ready' | 'playing' | 'done' | 'error';
   playNumber: number;
   scheduledAt: number;
   errorMessage?: string;
@@ -18,27 +18,14 @@ const GAP_MS = 30_000;
 
 function Playlist({ recordings }: PlaylistProps) {
   const [items, setItems] = useState<PlaylistItem[]>([]);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const timersRef = useRef<Record<string, number | undefined>>({});
+  const retryTimersRef = useRef<Record<string, number | undefined>>({});
   const audiosRef = useRef<Record<string, HTMLAudioElement | null>>({});
   const itemsRef = useRef<PlaylistItem[]>([]);
   const scheduledRecordingsRef = useRef<Set<string>>(new Set());
   const pendingAutoplayRef = useRef<Set<string>>(new Set());
   const autoplayUnlockedRef = useRef(false);
-
-  const removeItem = (id: string) => {
-    updateItems(prev => prev.filter(item => item.id !== id));
-
-    const timerId = timersRef.current[id];
-    if (timerId) {
-      window.clearTimeout(timerId);
-    }
-
-    const audio = audiosRef.current[id];
-    audio?.pause();
-    audiosRef.current[id] = null;
-
-    delete timersRef.current[id];
-  };
 
   const updateItems = (updater: (prev: PlaylistItem[]) => PlaylistItem[]) => {
     setItems(prev => {
@@ -47,8 +34,18 @@ function Playlist({ recordings }: PlaylistProps) {
       return next;
     });
   };
-
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
+
+  const queueRetry = (id: string, delay = 2000) => {
+    const existing = retryTimersRef.current[id];
+    if (existing) {
+      window.clearTimeout(existing);
+    }
+
+    retryTimersRef.current[id] = window.setTimeout(() => {
+      playOnce(id);
+    }, delay);
+  };
 
   const playOnce = async (id: string, manualTrigger = false) => {
     const currentItem = getItem(id);
@@ -59,21 +56,34 @@ function Playlist({ recordings }: PlaylistProps) {
     audio.currentTime = 0;
     audiosRef.current[id] = audio;
 
-    updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing' } : item)));
+    updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
 
-    const handleError = (message: string, shouldQueueAutoplay = false) => {
+    const handleError = (message: string, shouldQueueAutoplay = false, shouldRetry = false) => {
       audiosRef.current[id] = null;
       updateItems(prev =>
-        prev.map(item => (item.id === id ? { ...item, status: 'error', errorMessage: message } : item)),
+        prev.map(item =>
+          item.id === id
+            ? {
+                ...item,
+                status: shouldRetry ? 'ready' : 'error',
+                errorMessage: message,
+              }
+            : item,
+        ),
       );
 
       if (shouldQueueAutoplay) {
         pendingAutoplayRef.current.add(id);
       }
+
+      if (shouldRetry) {
+        queueRetry(id);
+      }
     };
 
     audio.onended = () => {
-      removeItem(id);
+      audiosRef.current[id] = null;
+      updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
     };
 
     audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
@@ -85,9 +95,14 @@ function Playlist({ recordings }: PlaylistProps) {
       handleError(
         manualTrigger
           ? 'ההשמעה נכשלה. נסו שוב.'
-          : 'הדפדפן חסם השמעה אוטומטית. ננסה שוב לאחר אישור ראשוני.',
+          : 'הדפדפן חסם השמעה אוטומטית. מנסים שוב אוטומטית.',
+        !manualTrigger,
         !manualTrigger,
       );
+
+      if (!manualTrigger) {
+        attemptAutoplayUnlock();
+      }
     }
   };
 
@@ -125,27 +140,42 @@ function Playlist({ recordings }: PlaylistProps) {
         const scheduledAt = baseTime + index * GAP_MS;
         const delay = Math.max(0, scheduledAt - Date.now());
 
-        const timeoutId = window.setTimeout(() => {
-          const newItem: PlaylistItem = {
-            ...recording,
-            id: playId,
-            status: 'ready',
-            playNumber,
-            scheduledAt,
-          };
+        const newItem: PlaylistItem = {
+          ...recording,
+          id: playId,
+          status: 'scheduled',
+          playNumber,
+          scheduledAt,
+        };
 
-          updateItems(prev => [newItem, ...prev]);
+        updateItems(prev => [...prev, newItem]);
+
+        const timeoutId = window.setTimeout(() => {
+          updateItems(prev =>
+            prev.map(item => (item.id === playId ? { ...item, status: 'ready' } : item)),
+          );
           playOnce(playId);
         }, delay);
 
         timersRef.current[playId] = timeoutId;
       });
+
+      attemptAutoplayUnlock();
     });
-  }, [recordings]);
+  }, [attemptAutoplayUnlock, recordings]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(
     () => () => {
       Object.values(timersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
+      Object.values(retryTimersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(audiosRef.current).forEach(audio => audio?.pause());
     },
     [],
@@ -162,24 +192,37 @@ function Playlist({ recordings }: PlaylistProps) {
     };
   }, [attemptAutoplayUnlock]);
 
+  const renderCountdown = (scheduledAt: number) => {
+    const remaining = Math.max(0, scheduledAt - currentTime);
+    const totalSeconds = Math.floor(remaining / 1000);
+    const minutes = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+
+    return `${minutes}:${seconds}`;
+  };
+
+  const sortedItems = [...items].sort((a, b) => a.scheduledAt - b.scheduledAt || a.playNumber - b.playNumber);
+
   return (
     <section className="space-y-4">
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-emerald-200">רשימת השמעה</p>
           <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות בהפרש של 30 שניות</h2>
-          <p className="text-sm text-slate-400">אנו מוסיפים לרשימה רק השמעות שהגיע זמנן – כל השמעה מופעלת אוטומטית בזמן שלה.</p>
+          <p className="text-sm text-slate-400">כל ההשמעות מתוזמנות מראש ומופעלות אוטומטית כשהזמן שלהן מגיע, ללא צורך בלחיצה נוספת.</p>
         </div>
         <div className="text-sm text-slate-400">סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
       </div>
 
-      {items.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <div className="p-6 border border-dashed border-slate-800 rounded-2xl text-center text-slate-400">
           טרם הוקלטו קבצים, או שזמן ההשמעה המתוזמן טרם הגיע.
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {items.map(item => (
+          {sortedItems.map(item => (
             <li key={item.id} className="border border-slate-800 bg-slate-900/70 rounded-2xl p-4 shadow-lg space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -193,6 +236,7 @@ function Playlist({ recordings }: PlaylistProps) {
                   <span className="text-[11px] text-slate-500">
                     התחלה מתוזמנת: {new Date(item.scheduledAt).toLocaleTimeString()}
                   </span>
+                  <span className="text-[11px] text-emerald-300">זמן נותר: {renderCountdown(item.scheduledAt)}</span>
                 </div>
               </div>
 
@@ -203,7 +247,11 @@ function Playlist({ recordings }: PlaylistProps) {
                     ? 'משמיע כעת'
                     : item.status === 'done'
                       ? 'השמעה הושלמה'
-                      : 'מוכן להפעלה'}
+                      : item.status === 'scheduled'
+                        ? 'בהמתנה להפעלה בזמן המתוזמן'
+                        : item.status === 'error'
+                          ? 'התרחשה שגיאה'
+                          : 'מוכן להפעלה'}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -214,7 +262,9 @@ function Playlist({ recordings }: PlaylistProps) {
                           ? 'border-slate-500 text-slate-200 bg-slate-500/10'
                           : item.status === 'error'
                             ? 'border-rose-500 text-rose-200 bg-rose-500/10'
-                            : 'border-slate-700 text-slate-200 bg-slate-700/20'
+                            : item.status === 'scheduled'
+                              ? 'border-slate-700 text-slate-200 bg-slate-700/20'
+                              : 'border-emerald-400 text-emerald-200 bg-emerald-500/10'
                     }`}
                   >
                     {item.status === 'playing'
@@ -223,7 +273,9 @@ function Playlist({ recordings }: PlaylistProps) {
                         ? 'הסתיים'
                         : item.status === 'error'
                           ? 'שגיאה'
-                          : 'מוכן'}
+                          : item.status === 'scheduled'
+                            ? 'מתוזמן'
+                            : 'מוכן'}
                   </span>
 
                   {(item.status === 'ready' || item.status === 'error') && (
