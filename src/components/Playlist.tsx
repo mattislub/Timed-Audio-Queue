@@ -33,16 +33,19 @@ function Playlist({ recordings }: PlaylistProps) {
 
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
 
-  const playOnce = async (id: string) => {
+  const playOnce = async (id: string, manualTrigger = false) => {
     const currentItem = getItem(id);
     if (!currentItem) return;
 
-    const audio = new Audio(currentItem.url);
+    const existingAudio = audiosRef.current[id];
+    const audio = existingAudio ?? new Audio(currentItem.url);
+    audio.currentTime = 0;
     audiosRef.current[id] = audio;
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing' } : item)));
 
     const handleError = (message: string) => {
+      audiosRef.current[id] = null;
       updateItems(prev =>
         prev.map(item => (item.id === id ? { ...item, status: 'error', errorMessage: message } : item)),
       );
@@ -50,6 +53,7 @@ function Playlist({ recordings }: PlaylistProps) {
 
     audio.onended = () => {
       updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
+      audiosRef.current[id] = null;
     };
 
     audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
@@ -58,8 +62,16 @@ function Playlist({ recordings }: PlaylistProps) {
       await audio.play();
     } catch (error) {
       console.error('Playback error', error);
-      handleError('לא ניתן להתחיל השמעה.');
+      handleError(
+        manualTrigger
+          ? 'ההשמעה נכשלה. נסו שוב.'
+          : 'הדפדפן חסם השמעה אוטומטית. לחצו על "נגן עכשיו" כדי להתחיל.',
+      );
     }
+  };
+
+  const retryPlay = (id: string) => {
+    playOnce(id, true);
   };
 
   useEffect(() => {
@@ -144,25 +156,37 @@ function Playlist({ recordings }: PlaylistProps) {
                       ? 'השמעה הושלמה'
                       : 'מוכן להפעלה'}
                 </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs border ${
-                    item.status === 'playing'
-                      ? 'border-emerald-400 text-emerald-200 bg-emerald-500/10'
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs border ${
+                      item.status === 'playing'
+                        ? 'border-emerald-400 text-emerald-200 bg-emerald-500/10'
+                        : item.status === 'done'
+                          ? 'border-slate-500 text-slate-200 bg-slate-500/10'
+                          : item.status === 'error'
+                            ? 'border-rose-500 text-rose-200 bg-rose-500/10'
+                            : 'border-slate-700 text-slate-200 bg-slate-700/20'
+                    }`}
+                  >
+                    {item.status === 'playing'
+                      ? 'מתנגן'
                       : item.status === 'done'
-                        ? 'border-slate-500 text-slate-200 bg-slate-500/10'
+                        ? 'הסתיים'
                         : item.status === 'error'
-                          ? 'border-rose-500 text-rose-200 bg-rose-500/10'
-                          : 'border-slate-700 text-slate-200 bg-slate-700/20'
-                  }`}
-                >
-                  {item.status === 'playing'
-                    ? 'מתנגן'
-                    : item.status === 'done'
-                      ? 'הסתיים'
-                      : item.status === 'error'
-                        ? 'שגיאה'
-                        : 'מוכן'}
-                </span>
+                          ? 'שגיאה'
+                          : 'מוכן'}
+                  </span>
+
+                  {(item.status === 'ready' || item.status === 'error') && (
+                    <button
+                      type="button"
+                      onClick={() => retryPlay(item.id)}
+                      className="text-xs px-3 py-1 rounded-lg border border-emerald-500/60 text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
+                    >
+                      נגן עכשיו
+                    </button>
+                  )}
+                </div>
               </div>
 
               {item.status === 'error' && item.errorMessage && (
