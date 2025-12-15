@@ -173,13 +173,13 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-emerald-200">דף הקלטות</p>
-          <h2 className="text-2xl font-semibold">התחילו הקלטה חדשה</h2>
-          <p className="text-sm text-slate-400">
-            הקובץ יוזמן ל-6 השמעות עם המרווחים והמהירויות שהוגדרו במסך ההגדרות, וכל השמעה תתווסף אוטומטית ברגע שהגיע זמנה.
-          </p>
+          <p className="text-sm text-emerald-200">הקלטה</p>
+          <h2 className="text-2xl font-semibold">התחלה מהירה</h2>
+          <p className="text-sm text-slate-400">הקלטה נשמרת אוטומטית וממשיכה לרשימת ההשמעות.</p>
         </div>
-        <div className="text-right text-xs text-slate-400">{supportedMessage}</div>
+        <div className="text-right text-xs text-slate-300 bg-slate-800/70 border border-slate-700 px-3 py-2 rounded-lg">
+          {supportedMessage}
+        </div>
       </div>
 
       <div className="flex items-center justify-center gap-4 p-6 bg-slate-800/60 rounded-xl border border-slate-800">
@@ -214,7 +214,7 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
             ? 'מקליט עכשיו...'
             : isUploading
               ? 'שולח את הקובץ לשרת, אנא המתן לסיום ההעלאה.'
-              : 'מוכן להקלטה חדשה ללא WebM'}
+              : 'מוכן להקלטה חדשה'}
         </div>
       </div>
 
