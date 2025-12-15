@@ -126,8 +126,51 @@ app.use(
 );
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+async function enforcePlaybackLimit(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+
+  const requestedPath = req.originalUrl.split('?')[0];
+
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, plays_completed, total_plays FROM sounds WHERE file_url LIKE ? LIMIT 1',
+      [`%${requestedPath}`],
+    );
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return next();
+    }
+
+    const sound = rows[0];
+    const playsCompleted = Number(sound.plays_completed) || 0;
+    const totalAllowed = Number.isFinite(Number(sound.total_plays)) ? Number(sound.total_plays) : 6;
+
+    if (playsCompleted >= totalAllowed) {
+      return res.status(410).send('Playback limit reached');
+    }
+
+    const [updateResult] = await pool.query(
+      'UPDATE sounds SET plays_completed = plays_completed + 1 WHERE id = ? AND plays_completed < ?',
+      [sound.id, totalAllowed],
+    );
+
+    if (!updateResult?.affectedRows) {
+      return res.status(410).send('Playback limit reached');
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Failed to enforce playback limit', error);
+    return res.status(500).send('Failed to serve file');
+  }
+}
+
 app.use(
   '/uploads',
+  enforcePlaybackLimit,
   express.static(uploadsDir, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.webm')) {
