@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audio-queue-v3';
+const CACHE_NAME = 'audio-queue-v4';
 const urlsToCache = [
   '/',
   '/index.html'
@@ -39,6 +39,15 @@ self.addEventListener('fetch', event => {
 
   // Only handle same-origin requests to avoid interfering with external APIs.
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  // Always fetch uploaded audio files directly from the server to avoid serving
+  // stale, cached copies of recordings.
+  if (requestUrl.pathname.startsWith('/uploads/')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request)),
+    );
     return;
   }
 
