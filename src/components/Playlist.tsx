@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
 import type { AppSettings, Recording } from '../App';
-import { RECORDING_TTL_MS } from '../constants';
 
 type PlaylistProps = {
   recordings: Recording[];
@@ -13,8 +12,6 @@ type PlaylistItem = Recording & {
   playNumber: number;
   scheduledAt: number;
   playbackRate: number;
-  recordingId: string;
-  expiresAt: number;
   errorMessage?: string;
 };
 
@@ -98,12 +95,6 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     removeFromQueue(id);
 
     updateItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const removeRecording = (recordingId: string) => {
-    const itemsToRemove = itemsRef.current.filter(item => item.recordingId === recordingId);
-    itemsToRemove.forEach(item => removeItem(item.id));
-    scheduledRecordingsRef.current.delete(recordingId);
   };
 
   const queueRetry = (id: string, delay = 2000) => {
@@ -247,11 +238,6 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
   useEffect(() => {
     recordings.forEach(recording => {
-      if (recording.createdAt + RECORDING_TTL_MS <= Date.now()) {
-        removeRecording(recording.id);
-        return;
-      }
-
       if (scheduledRecordingsRef.current.has(recording.id)) return;
 
       scheduledRecordingsRef.current.add(recording.id);
@@ -273,8 +259,6 @@ function Playlist({ recordings, settings }: PlaylistProps) {
           playNumber,
           scheduledAt,
           playbackRate: repeat.playbackRate,
-          recordingId: recording.id,
-          expiresAt: recording.createdAt + RECORDING_TTL_MS,
         };
 
         updateItems(prev => [...prev, newItem]);
@@ -300,14 +284,6 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
     return () => window.clearInterval(intervalId);
   }, []);
-
-  useEffect(() => {
-    const expiredIds = new Set(
-      itemsRef.current.filter(item => item.expiresAt <= currentTime).map(item => item.recordingId),
-    );
-
-    expiredIds.forEach(recordingId => removeRecording(recordingId));
-  }, [currentTime]);
 
   useEffect(
     () => () => {

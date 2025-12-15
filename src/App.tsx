@@ -3,7 +3,6 @@ import { Cog, ListMusic, Mic2 } from 'lucide-react';
 import Recorder from './components/Recorder';
 import Playlist from './components/Playlist';
 import Settings from './components/Settings';
-import { RECORDING_TTL_MS } from './constants';
 
 export type Recording = {
   id: string;
@@ -50,19 +49,12 @@ async function fetchRecordings() {
     created_at?: string;
   }>;
 
-  const now = Date.now();
-
-  return data
-    .map(
-      item =>
-        ({
-          id: item.id,
-          name: item.file_name,
-          url: item.file_url,
-          createdAt: item.created_at ? new Date(item.created_at).getTime() : now,
-        } satisfies Recording),
-    )
-    .filter(recording => recording.createdAt + RECORDING_TTL_MS > now);
+  return data.map(item => ({
+    id: item.id,
+    name: item.file_name,
+    url: item.file_url,
+    createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+  } satisfies Recording));
 }
 
 function App() {
