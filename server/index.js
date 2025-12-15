@@ -298,13 +298,17 @@ app.post('/api/sounds/upload', upload.single('file'), (req, res) => {
     return res.status(400).send('file is required');
   }
 
-  const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}-${req.file.originalname}`;
-  const targetPath = path.join(uploadsDir, `${req.file.filename}-${req.file.originalname}`);
+  const safeOriginalName = sanitizeFileName(req.file.originalname);
+  const finalName = `${req.file.filename}-${safeOriginalName}`;
+  const publicUrl = buildPublicUrl(req, finalName);
+  const targetPath = path.join(uploadsDir, finalName);
+
   fs.rename(req.file.path, targetPath, (err) => {
     if (err) {
       console.error('Failed to move uploaded file', err);
       return res.status(500).send('Failed to store file');
     }
+
     return res.status(201).json({ publicUrl });
   });
 });
