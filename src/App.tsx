@@ -40,7 +40,7 @@ async function fetchRecordings() {
   const response = await fetch(buildApiUrl('/sounds'));
   if (!response.ok) {
     console.error('[App] Failed to fetch recordings', response.status, response.statusText);
-    return [];
+    return { recordings: [], serverNow: undefined };
   }
 
   const clientNow = Date.now();
@@ -53,13 +53,15 @@ async function fetchRecordings() {
 
   const serverNowHeader = response.headers.get('date');
   const serverNow = serverNowHeader ? new Date(serverNowHeader).getTime() : undefined;
+  const offsetMs = serverNow ? serverNow - clientNow : 0;
   const now = serverNow ?? clientNow;
 
   console.info('[Clock]', {
     source: serverNow ? 'server' : 'client',
     serverNow,
     clientNow,
-    offsetMs: serverNow ? serverNow - clientNow : 0,
+    offsetMs,
+    reason: serverNow ? 'date header exposed by server' : 'missing Date header; using client clock',
   });
 
   return {
