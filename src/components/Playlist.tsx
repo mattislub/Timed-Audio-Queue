@@ -369,51 +369,55 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const sortedItems = [...items].sort((a, b) => a.scheduledAt - b.scheduledAt || a.playNumber - b.playNumber);
 
   return (
-    <section className="space-y-4">
-      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-sm text-emerald-200">Playlist</p>
-          <h2 className="text-2xl font-semibold">Every file joins the queue automatically</h2>
-          <p className="text-sm text-slate-400">Playback is scheduled in advance and starts on its own when the time comes.</p>
+    <section className="space-y-6">
+      <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl shadow-emerald-900/10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200/80">Playback</p>
+          <h2 className="text-2xl font-semibold">Scheduled queue</h2>
         </div>
-        <div className="text-sm text-slate-300 text-right space-y-2">
-          <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">Total of {TOTAL_PLAYS} plays per file</div>
-          <div className="flex flex-wrap gap-2 justify-end text-[11px] text-slate-200">
+        <div className="flex flex-col gap-3 text-sm text-slate-200 md:items-end">
+          <div className="flex flex-wrap gap-2 justify-end text-[11px]">
             {sanitizedRepeats.map((repeat, index) => (
               <span
                 key={index}
-                className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/70 text-right"
+                className="px-3 py-1 rounded-full border border-slate-700/80 bg-slate-950/60 text-emerald-100 shadow-inner shadow-emerald-900/30"
               >
                 {index + 1}: T+{scheduledOffsets[index]}s @ {repeat.playbackRate.toFixed(2)}x
               </span>
             ))}
           </div>
+          <div className="px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-100">
+            {TOTAL_PLAYS} plays per file
+          </div>
         </div>
       </div>
 
       {sortedItems.length === 0 ? (
-        <div className="p-6 border border-dashed border-slate-800 rounded-2xl text-center text-slate-400">
+        <div className="p-10 border border-dashed border-slate-800 rounded-3xl text-center text-slate-300 bg-slate-900/60">
           No recordings captured yet, or the scheduled play time has not arrived.
         </div>
       ) : (
-        <ul className="grid gap-4 md:grid-cols-2">
+        <ul className="space-y-4">
           {sortedItems.map(item => (
-            <li key={item.id} className="border border-slate-800 bg-slate-900/70 rounded-2xl p-4 shadow-lg space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm text-slate-100">{item.name}</p>
-                  <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+            <li
+              key={item.id}
+              className="border border-slate-800 bg-slate-900/80 rounded-3xl p-5 shadow-xl shadow-emerald-900/10 space-y-4"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-white">{item.name}</p>
+                  <p className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleString()}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1 text-xs text-slate-200 text-right">
-                  <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-slate-800/70 border border-slate-700">
+                <div className="flex flex-col items-end gap-2 text-xs text-slate-200 text-right">
+                  <span className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/70 border border-slate-700 shadow-inner shadow-slate-900">
                     <Play className="w-4 h-4" /> {item.playNumber}/{TOTAL_PLAYS}
                   </span>
-                  <span className="text-[11px] text-emerald-300">{renderCountdown(item.scheduledAt)}</span>
+                  <span className="text-[12px] font-semibold text-emerald-300">{renderCountdown(item.scheduledAt)}</span>
                   <span className="text-[11px] text-slate-500">{new Date(item.scheduledAt).toLocaleTimeString()}</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-sm text-slate-300">
+              <div className="flex items-center justify-between text-sm text-slate-200">
                 <div className="flex items-center gap-2">
                   <Clock3 className="w-4 h-4 text-emerald-300" />
                   {item.status === 'playing'
@@ -428,16 +432,16 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs border ${
+                    className={`px-4 py-1 rounded-full text-xs border shadow-sm ${
                       item.status === 'playing'
-                        ? 'border-emerald-400 text-emerald-200 bg-emerald-500/10'
+                        ? 'border-emerald-400 text-emerald-100 bg-emerald-500/15'
                         : item.status === 'done'
                           ? 'border-slate-500 text-slate-200 bg-slate-500/10'
                           : item.status === 'error'
-                            ? 'border-rose-500 text-rose-200 bg-rose-500/10'
+                            ? 'border-rose-500 text-rose-200 bg-rose-500/15'
                             : item.status === 'scheduled'
                               ? 'border-slate-700 text-slate-200 bg-slate-700/20'
-                              : 'border-emerald-400 text-emerald-200 bg-emerald-500/10'
+                              : 'border-emerald-400 text-emerald-100 bg-emerald-500/15'
                     }`}
                   >
                     {item.status === 'playing'
@@ -455,7 +459,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                     <button
                       type="button"
                       onClick={() => retryPlay(item.id)}
-                      className="text-xs px-3 py-1 rounded-lg border border-emerald-500/60 text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
+                      className="text-xs px-3 py-1 rounded-lg border border-emerald-500/60 text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20 transition shadow-sm"
                     >
                       Play now
                     </button>
@@ -469,7 +473,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
               </div>
 
               {item.status === 'error' && item.errorMessage && (
-                <div className="flex items-center gap-2 text-rose-200 text-sm">
+                <div className="flex items-center gap-2 text-rose-200 text-sm bg-rose-500/5 border border-rose-500/40 rounded-xl px-3 py-2">
                   <AlertTriangle className="w-4 h-4" /> {item.errorMessage}
                 </div>
               )}
