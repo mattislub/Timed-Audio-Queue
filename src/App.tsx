@@ -3,6 +3,7 @@ import { Cog, ListMusic, Mic2 } from 'lucide-react';
 import Recorder from './components/Recorder';
 import Playlist from './components/Playlist';
 import Settings from './components/Settings';
+import { RECORDING_TTL_MS } from './constants';
 
 export type Recording = {
   id: string;
@@ -33,7 +34,7 @@ function buildApiUrl(path: string) {
 
 async function fetchRecordings() {
   if (!API_BASE_URL) {
-    return [];
+    return { recordings: [], serverNow: undefined };
   }
 
   const response = await fetch(buildApiUrl('/sounds'));
@@ -49,16 +50,29 @@ async function fetchRecordings() {
     created_at?: string;
   }>;
 
-  return data.map(item => ({
-    id: item.id,
-    name: item.file_name,
-    url: item.file_url,
-    createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
-  } satisfies Recording));
+  const serverNowHeader = response.headers.get('date');
+  const serverNow = serverNowHeader ? new Date(serverNowHeader).getTime() : undefined;
+  const now = serverNow ?? Date.now();
+
+  return {
+    recordings: data
+      .map(
+        item =>
+          ({
+            id: item.id,
+            name: item.file_name,
+            url: item.file_url,
+            createdAt: item.created_at ? new Date(item.created_at).getTime() : now,
+          } satisfies Recording),
+      )
+      .filter(recording => recording.createdAt + RECORDING_TTL_MS > now),
+    serverNow,
+  };
 }
 
 function App() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [activePage, setActivePage] = useState<'record' | 'playlist' | 'settings'>('record');
   const [settings, setSettings] = useState<AppSettings>({
     repeatSettings: [
@@ -75,8 +89,11 @@ function App() {
     let isMounted = true;
 
     const load = async () => {
-      const latest = await fetchRecordings();
+      const { recordings: latest, serverNow } = await fetchRecordings();
       if (isMounted) {
+        if (serverNow) {
+          setServerOffsetMs(serverNow - Date.now());
+        }
         setRecordings(latest);
       }
     };
@@ -91,7 +108,10 @@ function App() {
   }, []);
 
   const refreshRecordings = async () => {
-    const latest = await fetchRecordings();
+    const { recordings: latest, serverNow } = await fetchRecordings();
+    if (serverNow) {
+      setServerOffsetMs(serverNow - Date.now());
+    }
     setRecordings(latest);
     setActivePage('playlist');
   };
@@ -159,7 +179,7 @@ function App() {
           <Recorder onRecordingSaved={refreshRecordings} settings={settings} />
         </div>
         <div className={activePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={activePage !== 'playlist'}>
-          <Playlist recordings={recordings} settings={settings} />
+          <Playlist recordings={recordings} settings={settings} serverOffsetMs={serverOffsetMs} />
         </div>
         <div className={activePage === 'settings' ? 'block' : 'hidden'} aria-hidden={activePage !== 'settings'}>
           <Settings settings={settings} onChange={setSettings} />
