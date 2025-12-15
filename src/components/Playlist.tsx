@@ -36,6 +36,28 @@ function Playlist({ recordings }: PlaylistProps) {
   };
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
 
+  const removeItem = (id: string) => {
+    const existingTimer = timersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    const retryTimer = retryTimersRef.current[id];
+    if (retryTimer) {
+      window.clearTimeout(retryTimer);
+    }
+
+    const audio = audiosRef.current[id];
+    audio?.pause();
+
+    delete timersRef.current[id];
+    delete retryTimersRef.current[id];
+    delete audiosRef.current[id];
+    pendingAutoplayRef.current.delete(id);
+
+    updateItems(prev => prev.filter(item => item.id !== id));
+  };
+
   const queueRetry = (id: string, delay = 2000) => {
     const existing = retryTimersRef.current[id];
     if (existing) {
@@ -50,6 +72,12 @@ function Playlist({ recordings }: PlaylistProps) {
   const playOnce = async (id: string, manualTrigger = false) => {
     const currentItem = getItem(id);
     if (!currentItem) return;
+
+    const existingTimer = timersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete timersRef.current[id];
+    }
 
     const existingAudio = audiosRef.current[id];
     const audio = existingAudio ?? new Audio(currentItem.url);
@@ -78,12 +106,16 @@ function Playlist({ recordings }: PlaylistProps) {
 
       if (shouldRetry) {
         queueRetry(id);
+        return;
       }
+
+      removeItem(id);
     };
 
     audio.onended = () => {
       audiosRef.current[id] = null;
       updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
+      removeItem(id);
     };
 
     audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
