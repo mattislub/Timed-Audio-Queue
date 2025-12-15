@@ -321,19 +321,19 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
   return (
     <section className="space-y-4">
-      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-start justify-between gap-4">
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-sm text-emerald-200">רשימת השמעה</p>
-          <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות עם מרווח ומהירות מותאמים לכל השמעה</h2>
-          <p className="text-sm text-slate-400">כל ההשמעות מתוזמנות מראש ומופעלות אוטומטית כשהזמן שלהן מגיע, ללא צורך בלחיצה נוספת.</p>
+          <h2 className="text-2xl font-semibold">כל קובץ נכנס לתור אוטומטי</h2>
+          <p className="text-sm text-slate-400">ההשמעות מתוזמנות מראש ומופעלות לבד כשהזמן מגיע.</p>
         </div>
-        <div className="text-sm text-slate-400 text-right space-y-2">
-          <div>סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
-          <div className="flex flex-wrap gap-2 justify-end text-[11px] text-slate-300">
+        <div className="text-sm text-slate-300 text-right space-y-2">
+          <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
+          <div className="flex flex-wrap gap-2 justify-end text-[11px] text-slate-200">
             {sanitizedRepeats.map((repeat, index) => (
               <span
                 key={index}
-                className="px-3 py-1 rounded-full border border-slate-700 bg-slate-800/70 text-right"
+                className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/70 text-right"
               >
                 {index + 1}: T+{scheduledOffsets[index]}s @ {repeat.playbackRate.toFixed(2)}x
               </span>
@@ -350,19 +350,17 @@ function Playlist({ recordings, settings }: PlaylistProps) {
         <ul className="grid gap-4 md:grid-cols-2">
           {sortedItems.map(item => (
             <li key={item.id} className="border border-slate-800 bg-slate-900/70 rounded-2xl p-4 shadow-lg space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-slate-300">{item.name}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm text-slate-100">{item.name}</p>
                   <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1 text-xs text-slate-300 text-right">
-                  <div className="flex items-center gap-2">
-                    <Play className="w-4 h-4" /> השמעה {item.playNumber}/{TOTAL_PLAYS}
-                  </div>
-                  <span className="text-[11px] text-slate-500">
-                    התחלה מתוזמנת: {new Date(item.scheduledAt).toLocaleTimeString()}
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-200 text-right">
+                  <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-slate-800/70 border border-slate-700">
+                    <Play className="w-4 h-4" /> {item.playNumber}/{TOTAL_PLAYS}
                   </span>
-                  <span className="text-[11px] text-emerald-300">זמן נותר: {renderCountdown(item.scheduledAt)}</span>
+                  <span className="text-[11px] text-emerald-300">{renderCountdown(item.scheduledAt)}</span>
+                  <span className="text-[11px] text-slate-500">{new Date(item.scheduledAt).toLocaleTimeString()}</span>
                 </div>
               </div>
 
@@ -372,12 +370,12 @@ function Playlist({ recordings, settings }: PlaylistProps) {
                   {item.status === 'playing'
                     ? 'משמיע כעת'
                     : item.status === 'done'
-                      ? 'השמעה הושלמה'
+                      ? 'הושלם'
                       : item.status === 'scheduled'
-                        ? 'בהמתנה להפעלה בזמן המתוזמן'
+                        ? 'מחכה לזמן שלו'
                         : item.status === 'error'
-                          ? 'התרחשה שגיאה'
-                          : 'מוכן להפעלה'}
+                          ? 'שגיאה'
+                          : 'מוכן'}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -417,8 +415,8 @@ function Playlist({ recordings, settings }: PlaylistProps) {
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>זמן משוער: T+{scheduledOffsets[item.playNumber - 1]}s</span>
-                <span>מהירות: {item.playbackRate.toFixed(2)}x</span>
+                <span>T+{scheduledOffsets[item.playNumber - 1]}s</span>
+                <span>{item.playbackRate.toFixed(2)}x</span>
               </div>
 
               {item.status === 'error' && item.errorMessage && (

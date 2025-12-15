@@ -42,8 +42,8 @@ function Settings({ settings, onChange }: SettingsProps) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-emerald-200">הגדרות תזמון</p>
-          <h2 className="text-2xl font-semibold">התאמה אישית של זמני השמעה</h2>
-          <p className="text-sm text-slate-400">הגדירו לכל אחת מ-6 ההשמעות את המרווח והמהירות הרצויה.</p>
+          <h2 className="text-2xl font-semibold">התאמה מהירה</h2>
+          <p className="text-sm text-slate-400">קובעים מרווח ומהירות לכל אחת מ-6 ההשמעות.</p>
         </div>
         <div className="text-right text-sm text-slate-300">
           <p className="text-xs text-slate-500">ברירת מחדל</p>
