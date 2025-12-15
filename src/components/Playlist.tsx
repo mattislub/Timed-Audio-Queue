@@ -25,6 +25,21 @@ function Playlist({ recordings }: PlaylistProps) {
   const pendingAutoplayRef = useRef<Set<string>>(new Set());
   const autoplayUnlockedRef = useRef(false);
 
+  const removeItem = (id: string) => {
+    updateItems(prev => prev.filter(item => item.id !== id));
+
+    const timerId = timersRef.current[id];
+    if (timerId) {
+      window.clearTimeout(timerId);
+    }
+
+    const audio = audiosRef.current[id];
+    audio?.pause();
+    audiosRef.current[id] = null;
+
+    delete timersRef.current[id];
+  };
+
   const updateItems = (updater: (prev: PlaylistItem[]) => PlaylistItem[]) => {
     setItems(prev => {
       const next = updater(prev);
@@ -58,8 +73,7 @@ function Playlist({ recordings }: PlaylistProps) {
     };
 
     audio.onended = () => {
-      updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
-      audiosRef.current[id] = null;
+      removeItem(id);
     };
 
     audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
