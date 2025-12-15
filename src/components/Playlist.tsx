@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
 import type { AppSettings, Recording } from '../App';
+import { RECORDING_TTL_MS } from '../constants';
 
 type PlaylistProps = {
   recordings: Recording[];
   settings: AppSettings;
+  serverOffsetMs: number;
 };
 
 type PlaylistItem = Recording & {
@@ -12,14 +14,17 @@ type PlaylistItem = Recording & {
   playNumber: number;
   scheduledAt: number;
   playbackRate: number;
+  recordingId: string;
+  expiresAt: number;
   errorMessage?: string;
 };
 
 const TOTAL_PLAYS = 6;
 
-function Playlist({ recordings, settings }: PlaylistProps) {
+function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const [items, setItems] = useState<PlaylistItem[]>([]);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const getServerNow = useCallback(() => Date.now() + serverOffsetMs, [serverOffsetMs]);
+  const [currentTime, setCurrentTime] = useState(() => getServerNow());
   const timersRef = useRef<Record<string, number | undefined>>({});
   const retryTimersRef = useRef<Record<string, number | undefined>>({});
   const audiosRef = useRef<Record<string, HTMLAudioElement | null>>({});
@@ -95,6 +100,12 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     removeFromQueue(id);
 
     updateItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const removeRecording = (recordingId: string) => {
+    const itemsToRemove = itemsRef.current.filter(item => item.recordingId === recordingId);
+    itemsToRemove.forEach(item => removeItem(item.id));
+    scheduledRecordingsRef.current.delete(recordingId);
   };
 
   const queueRetry = (id: string, delay = 2000) => {
@@ -238,10 +249,15 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
   useEffect(() => {
     recordings.forEach(recording => {
+      if (recording.createdAt + RECORDING_TTL_MS <= getServerNow()) {
+        removeRecording(recording.id);
+        return;
+      }
+
       if (scheduledRecordingsRef.current.has(recording.id)) return;
 
       scheduledRecordingsRef.current.add(recording.id);
-      const baseTime = Date.now();
+      const baseTime = getServerNow();
 
       let accumulatedMs = 0;
 
@@ -250,7 +266,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
         const playNumber = index + 1;
         const playId = `${recording.id}-play-${playNumber}`;
         const scheduledAt = baseTime + accumulatedMs;
-        const delay = Math.max(0, scheduledAt - Date.now());
+        const delay = Math.max(0, scheduledAt - getServerNow());
 
         const newItem: PlaylistItem = {
           ...recording,
@@ -259,6 +275,8 @@ function Playlist({ recordings, settings }: PlaylistProps) {
           playNumber,
           scheduledAt,
           playbackRate: repeat.playbackRate,
+          recordingId: recording.id,
+          expiresAt: recording.createdAt + RECORDING_TTL_MS,
         };
 
         updateItems(prev => [...prev, newItem]);
@@ -275,15 +293,27 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
       attemptAutoplayUnlock();
     });
-  }, [attemptAutoplayUnlock, recordings, sanitizedRepeats]);
+  }, [attemptAutoplayUnlock, getServerNow, recordings, sanitizedRepeats]);
+
+  useEffect(() => {
+    setCurrentTime(getServerNow());
+  }, [getServerNow]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setCurrentTime(Date.now());
+      setCurrentTime(getServerNow());
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [getServerNow]);
+
+  useEffect(() => {
+    const expiredIds = new Set(
+      itemsRef.current.filter(item => item.expiresAt <= currentTime).map(item => item.recordingId),
+    );
+
+    expiredIds.forEach(recordingId => removeRecording(recordingId));
+  }, [currentTime]);
 
   useEffect(
     () => () => {
