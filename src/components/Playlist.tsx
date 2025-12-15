@@ -308,11 +308,31 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   }, [getServerNow]);
 
   useEffect(() => {
-    const expiredIds = new Set(
-      itemsRef.current.filter(item => item.expiresAt <= currentTime).map(item => item.recordingId),
+    const expiredItems = itemsRef.current.filter(item => item.expiresAt <= currentTime);
+    const expiredRecordings = Array.from(
+      new Map(
+        expiredItems.map(item => [
+          item.recordingId,
+          {
+            id: item.recordingId,
+            name: item.name,
+            expiredAt: item.expiresAt,
+            createdAt: item.createdAt,
+            ageSeconds: Math.round((currentTime - item.createdAt) / 1000),
+            serverNow: currentTime,
+          },
+        ]),
+      ).values(),
     );
 
-    expiredIds.forEach(recordingId => removeRecording(recordingId));
+    if (expiredRecordings.length > 0) {
+      console.info(
+        '[Playlist] Removing expired recordings (server-clock aligned)',
+        expiredRecordings,
+      );
+    }
+
+    expiredRecordings.forEach(recording => removeRecording(recording.id));
   }, [currentTime]);
 
   useEffect(
