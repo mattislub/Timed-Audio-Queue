@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Cog, ListMusic, Mic2 } from 'lucide-react';
 import Recorder from './components/Recorder';
 import Playlist from './components/Playlist';
@@ -8,7 +8,6 @@ export type Recording = {
   id: string;
   name: string;
   url: string;
-  blob: Blob;
   createdAt: number;
 };
 
@@ -20,6 +19,43 @@ export type RepeatSetting = {
 export type AppSettings = {
   repeatSettings: RepeatSetting[];
 };
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+function buildApiUrl(path: string) {
+  if (!API_BASE_URL) return '';
+
+  const trimmed = API_BASE_URL.replace(/\/$/, '');
+  const baseWithApi = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+
+  return `${baseWithApi}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+async function fetchRecordings() {
+  if (!API_BASE_URL) {
+    return [];
+  }
+
+  const response = await fetch(buildApiUrl('/sounds'));
+  if (!response.ok) {
+    console.error('[App] Failed to fetch recordings', response.status, response.statusText);
+    return [];
+  }
+
+  const data = (await response.json()) as Array<{
+    id: string;
+    file_name: string;
+    file_url: string;
+    created_at?: string;
+  }>;
+
+  return data.map(item => ({
+    id: item.id,
+    name: item.file_name,
+    url: item.file_url,
+    createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+  } satisfies Recording));
+}
 
 function App() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -35,8 +71,28 @@ function App() {
     ],
   });
 
-  const handleNewRecording = (recording: Recording) => {
-    setRecordings(prev => [recording, ...prev]);
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = async () => {
+      const latest = await fetchRecordings();
+      if (isMounted) {
+        setRecordings(latest);
+      }
+    };
+
+    load();
+    const intervalId = window.setInterval(load, 5000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const refreshRecordings = async () => {
+    const latest = await fetchRecordings();
+    setRecordings(latest);
     setActivePage('playlist');
   };
 
@@ -100,7 +156,7 @@ function App() {
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
         <div className={activePage === 'record' ? 'block' : 'hidden'} aria-hidden={activePage !== 'record'}>
-          <Recorder onRecordingReady={handleNewRecording} settings={settings} />
+          <Recorder onRecordingSaved={refreshRecordings} settings={settings} />
         </div>
         <div className={activePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={activePage !== 'playlist'}>
           <Playlist recordings={recordings} settings={settings} />
