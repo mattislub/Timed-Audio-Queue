@@ -23,6 +23,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
   const timersRef = useRef<Record<string, number | undefined>>({});
   const retryTimersRef = useRef<Record<string, number | undefined>>({});
   const audiosRef = useRef<Record<string, HTMLAudioElement | null>>({});
+  const objectUrlsRef = useRef<Record<string, string>>({});
   const itemsRef = useRef<PlaylistItem[]>([]);
   const scheduledRecordingsRef = useRef<Set<string>>(new Set());
   const pendingAutoplayRef = useRef<Set<string>>(new Set());
@@ -88,9 +89,15 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
     const audio = audiosRef.current[id];
     audio?.pause();
+    const objectUrl = objectUrlsRef.current[id];
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+
     delete timersRef.current[id];
     delete retryTimersRef.current[id];
     delete audiosRef.current[id];
+    delete objectUrlsRef.current[id];
     pendingAutoplayRef.current.delete(id);
     removeFromQueue(id);
 
@@ -119,7 +126,37 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     }
 
     const existingAudio = audiosRef.current[id];
-    const audio = existingAudio ?? new Audio(currentItem.url);
+    const sourceUrl = (() => {
+      if (currentItem.blob) {
+        const existingUrl = objectUrlsRef.current[id];
+        if (existingUrl) return existingUrl;
+
+        const blobUrl = URL.createObjectURL(currentItem.blob);
+        objectUrlsRef.current[id] = blobUrl;
+        return blobUrl;
+      }
+
+      return currentItem.url;
+    })();
+
+    if (currentItem.blob?.type && !new Audio().canPlayType(currentItem.blob.type)) {
+      updateItems(prev =>
+        prev.map(item =>
+          item.id === id
+            ? {
+                ...item,
+                status: 'error',
+                errorMessage: 'פורמט הקובץ לא נתמך להשמעה בדפדפן זה.',
+              }
+            : item,
+        ),
+      );
+      removeItem(id);
+      startNextInQueue();
+      return;
+    }
+
+    const audio = existingAudio ?? new Audio(sourceUrl);
     audio.currentTime = 0;
     audio.playbackRate = currentItem.playbackRate;
     audiosRef.current[id] = audio;
@@ -225,9 +262,11 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       Object.values(timersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(retryTimersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(audiosRef.current).forEach(audio => audio?.pause());
+      Object.values(objectUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
       timersRef.current = {};
       retryTimersRef.current = {};
       audiosRef.current = {};
+      objectUrlsRef.current = {} as Record<string, string>;
       pendingAutoplayRef.current.clear();
       playbackQueueRef.current = [];
       scheduledRecordingsRef.current.clear();
@@ -290,6 +329,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       Object.values(timersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(retryTimersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(audiosRef.current).forEach(audio => audio?.pause());
+      Object.values(objectUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
     },
     [],
   );

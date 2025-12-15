@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Circle, StopCircle } from 'lucide-react';
-import type { AppSettings } from '../App';
+import type { AppSettings, Recording } from '../App';
 
 const NON_WEBM_TYPES = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -67,7 +67,7 @@ async function uploadRecording(blob: Blob, fileName: string) {
 }
 
 type RecorderProps = {
-  onRecordingSaved: () => void;
+  onRecordingReady: (recording: Recording) => void;
   settings: AppSettings;
 };
 
@@ -76,32 +76,7 @@ type RecordingError = {
   message: string;
 };
 
-async function createSoundRecord(fileName: string, publicUrl: string, playbackRates: number[]) {
-  const requestUrl = buildApiUrl('/sounds');
-  console.info('[Recorder] Creating sound record', { requestUrl, fileName });
-
-  const response = await fetch(requestUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      file_name: fileName,
-      file_url: publicUrl,
-      plays_completed: 0,
-      total_plays: 6,
-      is_playing: 0,
-      next_play_at: new Date().toISOString(),
-      playback_speeds: playbackRates,
-    }),
-  });
-
-  if (!response.ok) {
-    const message = await response.text().catch(() => '');
-    console.error('[Recorder] Failed to create sound record', { status: response.status, statusText: response.statusText, message });
-    throw new Error(message || 'שמירת פרטי ההקלטה בשרת נכשלה.');
-  }
-}
-
-function Recorder({ onRecordingSaved, settings }: RecorderProps) {
+function Recorder({ onRecordingReady, settings }: RecorderProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -169,9 +144,14 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         try {
           setIsUploading(true);
           const publicUrl = await uploadRecording(blob, fileName);
-          const playbackRates = settings.repeatSettings.map(repeat => repeat.playbackRate);
-          await createSoundRecord(fileName, publicUrl, playbackRates);
-          onRecordingSaved();
+
+          onRecordingReady({
+            id: crypto.randomUUID(),
+            blob,
+            name: fileName,
+            url: publicUrl,
+            createdAt: Date.now(),
+          });
         } catch (uploadError) {
           console.error('Upload failed', uploadError);
           setError({
@@ -195,7 +175,7 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         message: 'בדקו הרשאות מיקרופון ונסו שוב. ודאו שהפורמט אינו WebM.',
       });
     }
-  }, [onRecordingSaved, selectedMimeType, supportedMimeType, settings.repeatSettings]);
+  }, [onRecordingReady, selectedMimeType, supportedMimeType]);
 
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
