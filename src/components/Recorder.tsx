@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Circle, StopCircle } from 'lucide-react';
 import type { AppSettings } from '../App';
 
-const NON_WEBM_TYPES = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
+const NON_WEBM_TYPES = ['audio/mpeg', 'audio/ogg', 'audio/aac', 'audio/wav'];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
 function buildApiUrl(path: string) {
@@ -158,7 +158,12 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
           return;
         }
 
-        const extension = blob.type.split('/')[1] || 'audio';
+        const extensionMap: Record<string, string> = {
+          'audio/mpeg': 'mp3',
+          'audio/ogg': 'ogg',
+        };
+
+        const extension = extensionMap[blob.type] ?? blob.type.split('/')[1] ?? 'audio';
         const timestamp = new Date()
           .toISOString()
           .replace(/[-:]/g, '')
