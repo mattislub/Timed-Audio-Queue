@@ -121,7 +121,7 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>({
     repeatSettings: [
       { gapSeconds: 0, playbackRate: 1 },
-      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 2, playbackRate: 1 },
       { gapSeconds: 30, playbackRate: 1 },
       { gapSeconds: 30, playbackRate: 1 },
       { gapSeconds: 30, playbackRate: 1 },
