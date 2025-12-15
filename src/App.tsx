@@ -66,6 +66,20 @@ async function fetchRecordings() {
 
   console.info('[Clock]', clockInfo, `source=${clockInfo.source}; serverNow=${clockInfo.serverNow}; clientNow=${clockInfo.clientNow}; offsetMs=${clockInfo.offsetMs}; reason=${clockInfo.reason}`);
 
+  const parseServerTimestamp = (timestamp: string | undefined) => {
+    if (!timestamp) return now;
+
+    const trimmed = timestamp.trim();
+
+    // MySQL timestamps do not include a timezone; treat them as UTC to avoid client timezone skew
+    const normalized = /[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)
+      ? trimmed
+      : `${trimmed.replace(' ', 'T')}Z`;
+
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : now;
+  };
+
   const mappedRecordings = data
     .map(
       item =>
@@ -73,7 +87,7 @@ async function fetchRecordings() {
           id: item.id,
           name: item.file_name,
           url: item.file_url,
-          createdAt: item.created_at ? new Date(item.created_at).getTime() : now,
+          createdAt: parseServerTimestamp(item.created_at),
         } satisfies Recording),
     );
 
