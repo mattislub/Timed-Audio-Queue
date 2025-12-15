@@ -122,6 +122,7 @@ function toMySqlDateTime(value) {
 app.use(
   cors({
     origin: 'https://sr.70-60.com',
+    exposedHeaders: ['Date'],
   }),
 );
 app.use(express.json({ limit: '20mb' }));
