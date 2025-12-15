@@ -35,6 +35,20 @@ function Playlist({ recordings }: PlaylistProps) {
     });
   };
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
+  const playbackQueueRef = useRef<string[]>([]);
+
+  const enqueuePlayback = (id: string) => {
+    if (playbackQueueRef.current.includes(id)) return;
+    playbackQueueRef.current.push(id);
+  };
+
+  const dequeuePlayback = () => playbackQueueRef.current.shift();
+
+  const removeFromQueue = (id: string) => {
+    playbackQueueRef.current = playbackQueueRef.current.filter(queuedId => queuedId !== id);
+  };
+
+  const getCurrentlyPlayingId = () => itemsRef.current.find(item => item.status === 'playing')?.id;
 
   const removeItem = (id: string) => {
     const existingTimer = timersRef.current[id];
@@ -54,6 +68,7 @@ function Playlist({ recordings }: PlaylistProps) {
     delete retryTimersRef.current[id];
     delete audiosRef.current[id];
     pendingAutoplayRef.current.delete(id);
+    removeFromQueue(id);
 
     updateItems(prev => prev.filter(item => item.id !== id));
   };
@@ -65,7 +80,7 @@ function Playlist({ recordings }: PlaylistProps) {
     }
 
     retryTimersRef.current[id] = window.setTimeout(() => {
-      playOnce(id);
+      playWhenAvailable(id);
     }, delay);
   };
 
@@ -110,12 +125,14 @@ function Playlist({ recordings }: PlaylistProps) {
       }
 
       removeItem(id);
+      startNextInQueue();
     };
 
     audio.onended = () => {
       audiosRef.current[id] = null;
       updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
       removeItem(id);
+      startNextInQueue();
     };
 
     audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
@@ -139,13 +156,32 @@ function Playlist({ recordings }: PlaylistProps) {
   };
 
   const retryPlay = (id: string) => {
-    playOnce(id, true);
+    playWhenAvailable(id, true);
+  };
+
+  const playWhenAvailable = (id: string, manualTrigger = false) => {
+    const currentlyPlayingId = getCurrentlyPlayingId();
+
+    if (currentlyPlayingId && currentlyPlayingId !== id) {
+      enqueuePlayback(id);
+      return;
+    }
+
+    removeFromQueue(id);
+    playOnce(id, manualTrigger);
+  };
+
+  const startNextInQueue = () => {
+    const nextId = dequeuePlayback();
+    if (nextId) {
+      playWhenAvailable(nextId);
+    }
   };
 
   const retryPendingAutoplay = useCallback(() => {
     const pending = Array.from(pendingAutoplayRef.current);
     pendingAutoplayRef.current.clear();
-    pending.forEach(pendingId => playOnce(pendingId, true));
+    pending.forEach(pendingId => playWhenAvailable(pendingId, true));
   }, []);
 
   const attemptAutoplayUnlock = useCallback(() => {
@@ -186,7 +222,7 @@ function Playlist({ recordings }: PlaylistProps) {
           updateItems(prev =>
             prev.map(item => (item.id === playId ? { ...item, status: 'ready' } : item)),
           );
-          playOnce(playId);
+          playWhenAvailable(playId);
         }, delay);
 
         timersRef.current[playId] = timeoutId;
