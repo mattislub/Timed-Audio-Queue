@@ -112,6 +112,10 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     const currentItem = getItem(id);
     if (!currentItem) return;
 
+    if (!currentItem.url) {
+      console.warn('[Playlist] Missing URL for item', { id, currentItem });
+    }
+
     const existingTimer = timersRef.current[id];
     if (existingTimer) {
       window.clearTimeout(existingTimer);
@@ -127,6 +131,16 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
 
     const handleError = (message: string, shouldQueueAutoplay = false, shouldRetry = false) => {
+      console.error('[Playlist] Playback error', {
+        id,
+        message,
+        shouldQueueAutoplay,
+        shouldRetry,
+        url: currentItem.url,
+        networkState: audio.networkState,
+        readyState: audio.readyState,
+        error: audio.error?.message,
+      });
       audiosRef.current[id] = null;
       updateItems(prev =>
         prev.map(item =>
@@ -160,12 +174,28 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       startNextInQueue();
     };
 
-    audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
+    audio.onerror = event => {
+      console.error('[Playlist] Audio element onerror', {
+        id,
+        url: currentItem.url,
+        networkState: audio.networkState,
+        readyState: audio.readyState,
+        mediaError: audio.error,
+        event,
+      });
+      handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
+    };
 
     try {
+      console.log('[Playlist] Attempting playback', {
+        id,
+        url: currentItem.url,
+        playbackRate: currentItem.playbackRate,
+        manualTrigger,
+      });
       await audio.play();
     } catch (error) {
-      console.error('Playback error', error);
+      console.error('[Playlist] audio.play() threw', { id, url: currentItem.url, manualTrigger, error });
       handleError(
         manualTrigger
           ? 'ההשמעה נכשלה. נסו שוב.'
