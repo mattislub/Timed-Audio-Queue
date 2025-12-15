@@ -3,6 +3,40 @@ import { AlertCircle, Circle, StopCircle } from 'lucide-react';
 import type { AppSettings, Recording } from '../App';
 
 const NON_WEBM_TYPES = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+const blobToBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('קריאת הקובץ כשלה, נסו שוב.'));
+    reader.readAsDataURL(blob);
+  });
+
+async function uploadRecording(blob: Blob, fileName: string) {
+  if (!API_BASE_URL) {
+    throw new Error('VITE_API_BASE_URL לא הוגדר. עדכנו את קובץ .env עם כתובת השרת.');
+  }
+
+  const fileContent = await blobToBase64(blob);
+  const response = await fetch(`${API_BASE_URL.replace(/\/$/, '')}/sounds/upload/base64`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName, fileContent }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => '');
+    throw new Error(message || 'העלאת הקובץ לשרת נכשלה.');
+  }
+
+  const data = (await response.json()) as { publicUrl?: string };
+  if (!data.publicUrl) {
+    throw new Error('השרת לא החזיר כתובת ציבורית לקובץ.');
+  }
+
+  return data.publicUrl;
+}
 
 type RecorderProps = {
   onRecordingReady: (recording: Recording) => void;
@@ -20,6 +54,7 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<RecordingError | null>(null);
   const [selectedMimeType, setSelectedMimeType] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const supportedMimeType = useMemo(() => {
     const available = NON_WEBM_TYPES.find(type => MediaRecorder.isTypeSupported(type));
@@ -28,6 +63,14 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
 
   const startRecording = useCallback(async () => {
     setError(null);
+
+    if (!API_BASE_URL) {
+      setError({
+        title: 'כתובת API חסרה',
+        message: 'הגדירו VITE_API_BASE_URL כדי שההקלטה תישמר בשרת ולא רק מקומית.',
+      });
+      return;
+    }
 
     if (!supportedMimeType) {
       setError({
@@ -50,7 +93,7 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
         }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: selectedMimeType ?? supportedMimeType });
         chunksRef.current = [];
 
@@ -69,15 +112,30 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
           .replace('T', '-')
           .slice(0, 15);
         const fileName = `Recording-${timestamp}.${extension}`;
-        const url = URL.createObjectURL(blob);
 
-        onRecordingReady({
-          id: crypto.randomUUID(),
-          blob,
-          name: fileName,
-          url,
-          createdAt: Date.now(),
-        });
+        try {
+          setIsUploading(true);
+          const publicUrl = await uploadRecording(blob, fileName);
+
+          onRecordingReady({
+            id: crypto.randomUUID(),
+            blob,
+            name: fileName,
+            url: publicUrl,
+            createdAt: Date.now(),
+          });
+        } catch (uploadError) {
+          console.error('Upload failed', uploadError);
+          setError({
+            title: 'שמירה לשרת נכשלה',
+            message:
+              uploadError instanceof Error
+                ? uploadError.message
+                : 'חלה בעיה בהעלאת הקובץ לשרת. נסו שוב או בדקו את כתובת ה-API.',
+          });
+        } finally {
+          setIsUploading(false);
+        }
       };
 
       recorder.start();
@@ -127,7 +185,8 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
       <div className="flex items-center justify-center gap-4 p-6 bg-slate-800/60 rounded-xl border border-slate-800">
         <button
           onClick={isRecording ? stopRecording : startRecording}
-          className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-semibold transition border ${
+          disabled={isUploading}
+          className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-semibold transition border disabled:opacity-70 disabled:cursor-not-allowed ${
             isRecording
               ? 'bg-rose-600/90 border-rose-500 hover:bg-rose-600'
               : 'bg-emerald-600/90 border-emerald-500 hover:bg-emerald-600'
@@ -138,6 +197,11 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
               <StopCircle className="w-6 h-6" />
               עצור ושמור
             </>
+          ) : isUploading ? (
+            <>
+              <Circle className="w-6 h-6 animate-pulse" />
+              מעלה הקלטה לשרת...
+            </>
           ) : (
             <>
               <Circle className="w-6 h-6" />
@@ -146,7 +210,11 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
           )}
         </button>
         <div className="text-sm text-slate-300">
-          {isRecording ? 'מקליט עכשיו...' : 'מוכן להקלטה חדשה ללא WebM'}
+          {isRecording
+            ? 'מקליט עכשיו...'
+            : isUploading
+              ? 'שולח את הקובץ לשרת, אנא המתן לסיום ההעלאה.'
+              : 'מוכן להקלטה חדשה ללא WebM'}
         </div>
       </div>
 
