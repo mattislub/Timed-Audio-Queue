@@ -16,15 +16,15 @@ function buildApiUrl(path: string) {
 
 const blobToBase64 = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('קריאת הקובץ כשלה, נסו שוב.'));
-    reader.readAsDataURL(blob);
+  const reader = new FileReader();
+  reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('File read failed, please try again.'));
+  reader.readAsDataURL(blob);
   });
 
 async function uploadRecording(blob: Blob, fileName: string) {
   if (!API_BASE_URL) {
-    throw new Error('VITE_API_BASE_URL לא הוגדר. עדכנו את קובץ .env עם כתובת השרת.');
+    throw new Error('VITE_API_BASE_URL is not set. Update your .env with the server URL.');
   }
 
   const fileContent = await blobToBase64(blob);
@@ -53,13 +53,13 @@ async function uploadRecording(blob: Blob, fileName: string) {
       responseText: message,
     });
 
-    throw new Error(message || 'העלאת הקובץ לשרת נכשלה.');
+    throw new Error(message || 'Uploading the file to the server failed.');
   }
 
   const data = (await response.json()) as { publicUrl?: string };
   if (!data.publicUrl) {
     console.error('[Recorder] No publicUrl in upload response', { url: requestUrl, data });
-    throw new Error('השרת לא החזיר כתובת ציבורית לקובץ.');
+    throw new Error('The server did not return a public URL for the file.');
   }
 
   console.info('[Recorder] Upload succeeded', { url: requestUrl, publicUrl: data.publicUrl });
@@ -95,7 +95,7 @@ async function encodeWithMediaRecorder(audioBuffer: AudioBuffer, mimeType: strin
     };
 
     recorder.onerror = event => {
-      reject(event.error ?? new Error('שגיאה במהלך המרת הקובץ ל-OGG'));
+      reject(event.error ?? new Error('Error while converting the file to OGG'));
     };
 
     recorder.onstop = () => {
@@ -211,7 +211,7 @@ async function createSoundRecord(fileName: string, publicUrl: string, playbackRa
   if (!response.ok) {
     const message = await response.text().catch(() => '');
     console.error('[Recorder] Failed to create sound record', { status: response.status, statusText: response.statusText, message });
-    throw new Error(message || 'שמירת פרטי ההקלטה בשרת נכשלה.');
+    throw new Error(message || 'Saving the recording details on the server failed.');
   }
 }
 
@@ -234,8 +234,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
     if (!API_BASE_URL) {
       setError({
-        title: 'כתובת API חסרה',
-        message: 'הגדירו VITE_API_BASE_URL כדי שההקלטה תישמר בשרת ולא רק מקומית.',
+        title: 'Missing API URL',
+        message: 'Set VITE_API_BASE_URL so recordings save to the server and not only locally.',
       });
       return;
     }
@@ -275,11 +275,11 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
           } catch (conversionError) {
             console.error('Failed to convert WebM to playable format', conversionError);
             setError({
-              title: 'המרת WebM נכשלה',
+              title: 'WebM conversion failed',
               message:
                 conversionError instanceof Error
                   ? conversionError.message
-                  : 'לא ניתן היה להמיר את הקובץ. נסו שנית או בדקו הרשאות.',
+                  : 'The file could not be converted. Try again or check permissions.',
             });
             setIsConverting(false);
             return;
@@ -304,11 +304,11 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         } catch (uploadError) {
           console.error('Upload failed', uploadError);
           setError({
-            title: 'שמירה לשרת נכשלה',
+            title: 'Save to server failed',
             message:
               uploadError instanceof Error
                 ? uploadError.message
-                : 'חלה בעיה בהעלאת הקובץ לשרת. נסו שוב או בדקו את כתובת ה-API.',
+                : 'There was a problem uploading the file to the server. Try again or check the API URL.',
           });
         } finally {
           setIsUploading(false);
@@ -320,8 +320,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     } catch (err) {
       console.error('Recording failed', err);
       setError({
-        title: 'שגיאה בהפעלת המיקרופון',
-        message: 'בדקו הרשאות מיקרופון ונסו שוב. נבצע המרה אוטומטית אם יוקלט WebM.',
+        title: 'Microphone error',
+        message: 'Check microphone permissions and try again. We will convert automatically if WebM is recorded.',
       });
     }
   }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings]);
@@ -343,16 +343,16 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
   }, [stopRecording]);
 
   const supportedMessage = preferredMimeType
-    ? `הקלטה תשמר בפורמט ${preferredMimeType.replace('audio/', '').toUpperCase()}. אם תוקלט WebM נבצע המרה אוטומטית.`
-    : 'אין תמיכה בפורמט הקלטה מתאים בדפדפן הנוכחי';
+    ? `Recordings will be saved as ${preferredMimeType.replace('audio/', '').toUpperCase()}. WebM files will be converted automatically.`
+    : 'Recording is not supported in a compatible format in this browser.';
 
   return (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-emerald-200">הקלטה</p>
-          <h2 className="text-2xl font-semibold">התחלה מהירה</h2>
-          <p className="text-sm text-slate-400">הקלטה נשמרת אוטומטית וממשיכה לרשימת ההשמעות.</p>
+          <p className="text-sm text-emerald-200">Recording</p>
+          <h2 className="text-2xl font-semibold">Quick start</h2>
+          <p className="text-sm text-slate-400">Recordings save automatically and flow into the playback queue.</p>
         </div>
         <div className="text-right text-xs text-slate-300 bg-slate-800/70 border border-slate-700 px-3 py-2 rounded-lg">
           {supportedMessage}
@@ -372,28 +372,28 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
           {isRecording ? (
             <>
               <StopCircle className="w-6 h-6" />
-              עצור ושמור
+              Stop & save
             </>
           ) : isUploading ? (
             <>
               <Circle className="w-6 h-6 animate-pulse" />
-              מעלה הקלטה לשרת...
+              Uploading recording to server...
             </>
           ) : (
             <>
               <Circle className="w-6 h-6" />
-              התחל הקלטה
+              Start recording
             </>
           )}
         </button>
         <div className="text-sm text-slate-300">
           {isRecording
-            ? 'מקליט עכשיו...'
+            ? 'Recording now...'
             : isUploading
-              ? 'שולח את הקובץ לשרת, אנא המתן לסיום ההעלאה.'
+              ? 'Sending the file to the server, please wait for the upload to finish.'
               : isConverting
-                ? 'ממיר את הקובץ לפורמט נתמך...'
-                : 'מוכן להקלטה חדשה'}
+                ? 'Converting the file to a supported format...'
+                : 'Ready for a new recording'}
         </div>
       </div>
 
