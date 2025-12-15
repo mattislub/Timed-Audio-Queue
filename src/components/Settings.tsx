@@ -41,13 +41,13 @@ function Settings({ settings, onChange }: SettingsProps) {
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-emerald-200">הגדרות תזמון</p>
-          <h2 className="text-2xl font-semibold">התאמה מהירה</h2>
-          <p className="text-sm text-slate-400">קובעים מרווח ומהירות לכל אחת מ-6 ההשמעות.</p>
+          <p className="text-sm text-emerald-200">Scheduling settings</p>
+          <h2 className="text-2xl font-semibold">Quick configuration</h2>
+          <p className="text-sm text-slate-400">Choose a gap and speed for each of the six plays.</p>
         </div>
         <div className="text-right text-sm text-slate-300">
-          <p className="text-xs text-slate-500">ברירת מחדל</p>
-          <p>השמעה ראשונה מיידית, ולאחר מכן 30 שניות הפרש | מהירות 1x</p>
+          <p className="text-xs text-slate-500">Default</p>
+          <p>First play immediately, then a 30-second gap | Speed 1x</p>
         </div>
       </div>
 
@@ -57,16 +57,16 @@ function Settings({ settings, onChange }: SettingsProps) {
             <thead className="bg-slate-800/70 text-slate-100 text-xs uppercase tracking-wider">
               <tr>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  השמעה
+                  Play
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  הפרש בשניות
+                  Gap (seconds)
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  מהירות השמעה
+                  Playback speed
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  תוצאה משוערת
+                  Estimated result
                 </th>
               </tr>
             </thead>
@@ -75,14 +75,14 @@ function Settings({ settings, onChange }: SettingsProps) {
                 <tr key={index} className="hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-4 align-top">
                     <div className="flex flex-col gap-1">
-                      <span className="text-base font-semibold text-emerald-200">השמעה {index + 1}</span>
-                      <span className="text-xs text-slate-500">מרחק עד השמעה זו</span>
+                      <span className="text-base font-semibold text-emerald-200">Play {index + 1}</span>
+                      <span className="text-xs text-slate-500">Time until this play</span>
                       <span className="text-xs text-slate-400">T+{nextPlayTimes[index]}s</span>
                     </div>
                   </td>
                   <td className="px-4 py-4 align-top">
                     <label className="flex flex-col gap-2">
-                      <span className="text-xs text-slate-400">הפרש בשניות עד השמעה {index + 1}</span>
+                      <span className="text-xs text-slate-400">Gap in seconds until play {index + 1}</span>
                       <input
                         type="number"
                         min={0}
@@ -98,7 +98,7 @@ function Settings({ settings, onChange }: SettingsProps) {
                   </td>
                   <td className="px-4 py-4 align-top">
                     <label className="flex flex-col gap-3">
-                      <span className="text-xs text-slate-400">בחירת מהירות</span>
+                      <span className="text-xs text-slate-400">Select speed</span>
                       <input
                         type="range"
                         min={0.5}
@@ -133,12 +133,12 @@ function Settings({ settings, onChange }: SettingsProps) {
         </div>
 
         <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
-          <p className="font-semibold text-emerald-200">תצוגה מקדימה</p>
-          <p>6 ההשמעות המתוזמנות יופעלו במרווחים מוגדרים מראש עבור כל השמעה:</p>
+          <p className="font-semibold text-emerald-200">Preview</p>
+          <p>The 6 scheduled plays will run at the predefined intervals for each play:</p>
           <div className="flex flex-wrap gap-2 text-xs text-slate-400">
             {nextPlayTimes.map((seconds, index) => (
               <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
-                השמעה {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
+                Play {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
               </span>
             ))}
           </div>
@@ -149,7 +149,7 @@ function Settings({ settings, onChange }: SettingsProps) {
             type="submit"
             className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition border border-emerald-500 text-white font-semibold"
           >
-            שמירת הגדרות
+            Save settings
           </button>
         </div>
       </form>

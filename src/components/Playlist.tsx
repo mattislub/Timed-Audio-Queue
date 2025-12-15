@@ -171,7 +171,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
       startNextInQueue();
     };
 
-    audio.onerror = () => handleError('השמעה נכשלה. בדקו שהקובץ קיים ונתמך.');
+    audio.onerror = () => handleError('Playback failed. Check that the file exists and is supported.');
 
     try {
       await audio.play();
@@ -179,8 +179,8 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
       console.error('Playback error', error);
       handleError(
         manualTrigger
-          ? 'ההשמעה נכשלה. נסו שוב.'
-          : 'הדפדפן חסם השמעה אוטומטית. מנסים שוב אוטומטית.',
+          ? 'Playback failed. Please try again.'
+          : 'The browser blocked autoplay. Retrying automatically.',
         !manualTrigger,
         !manualTrigger,
       );
@@ -352,12 +352,12 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     <section className="space-y-4">
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-sm text-emerald-200">רשימת השמעה</p>
-          <h2 className="text-2xl font-semibold">כל קובץ נכנס לתור אוטומטי</h2>
-          <p className="text-sm text-slate-400">ההשמעות מתוזמנות מראש ומופעלות לבד כשהזמן מגיע.</p>
+          <p className="text-sm text-emerald-200">Playlist</p>
+          <h2 className="text-2xl font-semibold">Every file joins the queue automatically</h2>
+          <p className="text-sm text-slate-400">Playback is scheduled in advance and starts on its own when the time comes.</p>
         </div>
         <div className="text-sm text-slate-300 text-right space-y-2">
-          <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
+          <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">Total of {TOTAL_PLAYS} plays per file</div>
           <div className="flex flex-wrap gap-2 justify-end text-[11px] text-slate-200">
             {sanitizedRepeats.map((repeat, index) => (
               <span
@@ -373,7 +373,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
       {sortedItems.length === 0 ? (
         <div className="p-6 border border-dashed border-slate-800 rounded-2xl text-center text-slate-400">
-          טרם הוקלטו קבצים, או שזמן ההשמעה המתוזמן טרם הגיע.
+          No recordings captured yet, or the scheduled play time has not arrived.
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
@@ -397,14 +397,14 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                 <div className="flex items-center gap-2">
                   <Clock3 className="w-4 h-4 text-emerald-300" />
                   {item.status === 'playing'
-                    ? 'משמיע כעת'
+                    ? 'Playing now'
                     : item.status === 'done'
-                      ? 'הושלם'
+                      ? 'Completed'
                       : item.status === 'scheduled'
-                        ? 'מחכה לזמן שלו'
+                        ? 'Waiting for its time'
                         : item.status === 'error'
-                          ? 'שגיאה'
-                          : 'מוכן'}
+                          ? 'Error'
+                          : 'Ready'}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -421,14 +421,14 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                     }`}
                   >
                     {item.status === 'playing'
-                      ? 'מתנגן'
+                      ? 'Playing'
                       : item.status === 'done'
-                        ? 'הסתיים'
+                        ? 'Finished'
                         : item.status === 'error'
-                          ? 'שגיאה'
+                          ? 'Error'
                           : item.status === 'scheduled'
-                            ? 'מתוזמן'
-                            : 'מוכן'}
+                            ? 'Scheduled'
+                            : 'Ready'}
                   </span>
 
                   {(item.status === 'ready' || item.status === 'error') && (
@@ -437,7 +437,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                       onClick={() => retryPlay(item.id)}
                       className="text-xs px-3 py-1 rounded-lg border border-emerald-500/60 text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
                     >
-                      נגן עכשיו
+                      Play now
                     </button>
                   )}
                 </div>

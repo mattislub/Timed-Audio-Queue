@@ -127,9 +127,9 @@ function App() {
   };
 
   const subtitle = useMemo(() => {
-    if (activePage === 'record') return 'התחילו, עצרו ושמרו בלחיצה אחת';
-    if (activePage === 'playlist') return 'כל הקלטה נכנסת לתור מסודר';
-    return 'קובעים פעם אחת והכול פועל לבד';
+    if (activePage === 'record') return 'Start, stop, and save in one tap';
+    if (activePage === 'playlist') return 'Every recording joins the organized queue';
+    return 'Set it once and everything runs automatically';
   }, [activePage]);
 
   return (
@@ -142,7 +142,7 @@ function App() {
             </div>
             <div>
               <p className="text-xs text-emerald-200 uppercase tracking-[0.2em]">Timed Audio Queue</p>
-              <h1 className="text-xl font-semibold">תזמון הקלטות בקלות</h1>
+              <h1 className="text-xl font-semibold">Schedule recordings with ease</h1>
               <p className="text-sm text-slate-300">{subtitle}</p>
             </div>
           </div>
@@ -156,7 +156,7 @@ function App() {
               }`}
             >
               <Mic2 className="w-4 h-4" />
-              הקלטה
+              Record
             </button>
             <button
               onClick={() => setActivePage('playlist')}
@@ -167,7 +167,7 @@ function App() {
               }`}
             >
               <ListMusic className="w-4 h-4" />
-              השמעות
+              Plays
             </button>
             <button
               onClick={() => setActivePage('settings')}
@@ -178,7 +178,7 @@ function App() {
               }`}
             >
               <Cog className="w-4 h-4" />
-              הגדרות
+              Settings
             </button>
           </div>
         </div>
