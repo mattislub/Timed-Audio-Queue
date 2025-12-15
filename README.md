@@ -21,6 +21,9 @@ npm install
 npm run dev
 ```
 
+Create a `.env` file with `VITE_API_BASE_URL` pointing to your deployed API (for example `https://api.example.com/api`). Recorded
+audio is uploaded to the server via this endpoint so that files are persisted remotely rather than only in local browser memory.
+
 Visit `http://localhost:5173` and add to home screen to install as PWA.
 
 ### Building for Production
