@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
 import type { AppSettings, Recording } from '../App';
 
@@ -11,6 +11,7 @@ type PlaylistItem = Recording & {
   status: 'scheduled' | 'ready' | 'playing' | 'done' | 'error';
   playNumber: number;
   scheduledAt: number;
+  playbackRate: number;
   errorMessage?: string;
 };
 
@@ -36,10 +37,30 @@ function Playlist({ recordings, settings }: PlaylistProps) {
   };
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
   const playbackQueueRef = useRef<string[]>([]);
-  const previousGapRef = useRef<number>(settings.gapSeconds * 1000);
+  const sanitizedRepeats = useMemo(() => {
+    const normalized = settings.repeatSettings
+      .slice(0, TOTAL_PLAYS)
+      .map(repeat => ({
+        gapSeconds: Math.max(0, repeat.gapSeconds),
+        playbackRate: Math.min(3, Math.max(0.5, repeat.playbackRate)),
+      }));
 
-  const gapMs = Math.max(0, settings.gapSeconds * 1000);
-  const playbackRate = settings.playbackRate;
+    while (normalized.length < TOTAL_PLAYS) {
+      normalized.push({ gapSeconds: 30, playbackRate: 1 });
+    }
+
+    return normalized;
+  }, [settings.repeatSettings]);
+
+  const scheduleKey = JSON.stringify(sanitizedRepeats);
+  const previousScheduleKeyRef = useRef<string>(scheduleKey);
+  const scheduledOffsets = useMemo(() => {
+    let total = 0;
+    return sanitizedRepeats.map(repeat => {
+      total += repeat.gapSeconds;
+      return total;
+    });
+  }, [sanitizedRepeats]);
 
   const enqueuePlayback = (id: string) => {
     if (playbackQueueRef.current.includes(id)) return;
@@ -101,7 +122,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
     const existingAudio = audiosRef.current[id];
     const audio = existingAudio ?? new Audio(currentItem.url);
     audio.currentTime = 0;
-    audio.playbackRate = playbackRate;
+    audio.playbackRate = currentItem.playbackRate;
     audiosRef.current[id] = audio;
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
@@ -201,7 +222,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
   }, [retryPendingAutoplay]);
 
   useEffect(() => {
-    if (previousGapRef.current !== gapMs) {
+    if (previousScheduleKeyRef.current !== scheduleKey) {
       Object.values(timersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(retryTimersRef.current).forEach(timeoutId => window.clearTimeout(timeoutId));
       Object.values(audiosRef.current).forEach(audio => audio?.pause());
@@ -212,9 +233,9 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       playbackQueueRef.current = [];
       scheduledRecordingsRef.current.clear();
       updateItems(() => []);
-      previousGapRef.current = gapMs;
+      previousScheduleKeyRef.current = scheduleKey;
     }
-  }, [gapMs]);
+  }, [scheduleKey]);
 
   useEffect(() => {
     recordings.forEach(recording => {
@@ -223,10 +244,13 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       scheduledRecordingsRef.current.add(recording.id);
       const baseTime = Date.now();
 
-      Array.from({ length: TOTAL_PLAYS }).forEach((_, index) => {
+      let accumulatedMs = 0;
+
+      sanitizedRepeats.forEach((repeat, index) => {
+        accumulatedMs += repeat.gapSeconds * 1000;
         const playNumber = index + 1;
         const playId = `${recording.id}-play-${playNumber}`;
-        const scheduledAt = baseTime + index * gapMs;
+        const scheduledAt = baseTime + accumulatedMs;
         const delay = Math.max(0, scheduledAt - Date.now());
 
         const newItem: PlaylistItem = {
@@ -235,6 +259,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
           status: 'scheduled',
           playNumber,
           scheduledAt,
+          playbackRate: repeat.playbackRate,
         };
 
         updateItems(prev => [...prev, newItem]);
@@ -251,7 +276,7 @@ function Playlist({ recordings, settings }: PlaylistProps) {
 
       attemptAutoplayUnlock();
     });
-  }, [attemptAutoplayUnlock, gapMs, recordings]);
+  }, [attemptAutoplayUnlock, recordings, sanitizedRepeats]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -299,12 +324,21 @@ function Playlist({ recordings, settings }: PlaylistProps) {
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-emerald-200">רשימת השמעה</p>
-          <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות בהפרש של {settings.gapSeconds} שניות</h2>
+          <h2 className="text-2xl font-semibold">כל הקלטה נרשמת מראש ל-6 השמעות עם מרווח ומהירות מותאמים לכל השמעה</h2>
           <p className="text-sm text-slate-400">כל ההשמעות מתוזמנות מראש ומופעלות אוטומטית כשהזמן שלהן מגיע, ללא צורך בלחיצה נוספת.</p>
         </div>
-        <div className="text-sm text-slate-400 text-right space-y-1">
+        <div className="text-sm text-slate-400 text-right space-y-2">
           <div>סה"כ {TOTAL_PLAYS} השמעות לכל קובץ</div>
-          <div className="text-xs text-emerald-200">מהירות השמעה: {playbackRate.toFixed(2)}x</div>
+          <div className="flex flex-wrap gap-2 justify-end text-[11px] text-slate-300">
+            {sanitizedRepeats.map((repeat, index) => (
+              <span
+                key={index}
+                className="px-3 py-1 rounded-full border border-slate-700 bg-slate-800/70 text-right"
+              >
+                {index + 1}: T+{scheduledOffsets[index]}s @ {repeat.playbackRate.toFixed(2)}x
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -380,6 +414,11 @@ function Playlist({ recordings, settings }: PlaylistProps) {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>זמן משוער: T+{scheduledOffsets[item.playNumber - 1]}s</span>
+                <span>מהירות: {item.playbackRate.toFixed(2)}x</span>
               </div>
 
               {item.status === 'error' && item.errorMessage && (

@@ -118,7 +118,7 @@ function Recorder({ onRecordingReady, settings }: RecorderProps) {
           <p className="text-sm text-emerald-200">דף הקלטות</p>
           <h2 className="text-2xl font-semibold">התחילו הקלטה חדשה</h2>
           <p className="text-sm text-slate-400">
-            הקובץ יוזמן ל-6 השמעות בהפרש של {settings.gapSeconds} שניות, וכל השמעה תתווסף אוטומטית ברגע שהגיע זמנה.
+            הקובץ יוזמן ל-6 השמעות עם המרווחים והמהירויות שהוגדרו במסך ההגדרות, וכל השמעה תתווסף אוטומטית ברגע שהגיע זמנה.
           </p>
         </div>
         <div className="text-right text-xs text-slate-400">{supportedMessage}</div>

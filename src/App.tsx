@@ -12,17 +12,27 @@ export type Recording = {
   createdAt: number;
 };
 
-export type AppSettings = {
+export type RepeatSetting = {
   gapSeconds: number;
   playbackRate: number;
+};
+
+export type AppSettings = {
+  repeatSettings: RepeatSetting[];
 };
 
 function App() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [activePage, setActivePage] = useState<'record' | 'playlist' | 'settings'>('record');
   const [settings, setSettings] = useState<AppSettings>({
-    gapSeconds: 30,
-    playbackRate: 1,
+    repeatSettings: [
+      { gapSeconds: 0, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 30, playbackRate: 1 },
+    ],
   });
 
   const handleNewRecording = (recording: Recording) => {

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { AppSettings } from '../App';
+import { AppSettings, RepeatSetting } from '../App';
 
 type SettingsProps = {
   settings: AppSettings;
@@ -7,27 +7,35 @@ type SettingsProps = {
 };
 
 function Settings({ settings, onChange }: SettingsProps) {
-  const [gapSeconds, setGapSeconds] = useState(settings.gapSeconds);
-  const [playbackRate, setPlaybackRate] = useState(settings.playbackRate);
+  const [repeatSettings, setRepeatSettings] = useState<RepeatSetting[]>(settings.repeatSettings);
 
   useEffect(() => {
-    setGapSeconds(settings.gapSeconds);
-    setPlaybackRate(settings.playbackRate);
-  }, [settings.gapSeconds, settings.playbackRate]);
+    setRepeatSettings(settings.repeatSettings);
+  }, [settings.repeatSettings]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const nextSettings: AppSettings = {
-      gapSeconds: Math.max(1, Math.round(gapSeconds)),
-      playbackRate: Math.min(3, Math.max(0.5, Number(playbackRate.toFixed(2)))),
-    };
-    onChange(nextSettings);
+    const sanitizedRepeats: RepeatSetting[] = repeatSettings.slice(0, 6).map(repeat => ({
+      gapSeconds: Math.max(0, Math.round(repeat.gapSeconds)),
+      playbackRate: Math.min(3, Math.max(0.5, Number(repeat.playbackRate.toFixed(2)))),
+    }));
+
+    while (sanitizedRepeats.length < 6) {
+      sanitizedRepeats.push({ gapSeconds: 30, playbackRate: 1 });
+    }
+
+    onChange({ repeatSettings: sanitizedRepeats });
   };
 
-  const nextPlayTimes = useMemo(
-    () => Array.from({ length: 6 }, (_, index) => index * gapSeconds),
-    [gapSeconds],
-  );
+  const nextPlayTimes = useMemo(() => {
+    const times: number[] = [];
+    let total = 0;
+    repeatSettings.forEach((repeat, index) => {
+      total += Math.max(0, repeat.gapSeconds);
+      times[index] = total;
+    });
+    return times;
+  }, [repeatSettings]);
 
   return (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
@@ -35,56 +43,70 @@ function Settings({ settings, onChange }: SettingsProps) {
         <div>
           <p className="text-sm text-emerald-200">הגדרות תזמון</p>
           <h2 className="text-2xl font-semibold">התאמה אישית של זמני השמעה</h2>
-          <p className="text-sm text-slate-400">
-            הגדירו את ההפרש בין כל אחת מ-6 ההשמעות ואת מהירות ההשמעה המועדפת.
-          </p>
+          <p className="text-sm text-slate-400">הגדירו לכל אחת מ-6 ההשמעות את המרווח והמהירות הרצויה.</p>
         </div>
         <div className="text-right text-sm text-slate-300">
           <p className="text-xs text-slate-500">ברירת מחדל</p>
-          <p>30 שניות הפרש | מהירות 1x</p>
+          <p>השמעה ראשונה מיידית, ולאחר מכן 30 שניות הפרש | מהירות 1x</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid md:grid-cols-2 gap-4">
-          <label className="flex flex-col gap-2 bg-slate-800/60 border border-slate-800 rounded-xl p-4">
-            <span className="text-sm text-slate-300">הפרש בין השמעות (בשניות)</span>
-            <input
-              type="number"
-              min={1}
-              value={gapSeconds}
-              onChange={event => setGapSeconds(Number(event.target.value))}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
-            />
-            <span className="text-xs text-slate-500">השמעה חדשה כל {gapSeconds} שניות עד 6 פעמים.</span>
-          </label>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {repeatSettings.map((repeat, index) => (
+            <div key={index} className="space-y-3 bg-slate-800/60 border border-slate-800 rounded-xl p-4">
+              <div className="flex items-center justify-between text-sm text-slate-300">
+                <span className="font-semibold text-emerald-200">השמעה {index + 1}</span>
+                <span className="text-xs text-slate-500">מרחק עד השמעה זו</span>
+              </div>
 
-          <label className="flex flex-col gap-2 bg-slate-800/60 border border-slate-800 rounded-xl p-4">
-            <span className="text-sm text-slate-300">מהירות השמעה</span>
-            <input
-              type="range"
-              min={0.5}
-              max={3}
-              step={0.1}
-              value={playbackRate}
-              onChange={event => setPlaybackRate(Number(event.target.value))}
-              className="accent-emerald-500"
-            />
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>0.5x</span>
-              <span className="text-emerald-200 text-sm font-semibold">{playbackRate.toFixed(1)}x</span>
-              <span>3x</span>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm text-slate-300">הפרש בשניות עד השמעה {index + 1}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={repeat.gapSeconds}
+                  onChange={event => {
+                    const next = [...repeatSettings];
+                    next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
+                    setRepeatSettings(next);
+                  }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm text-slate-300">מהירות השמעה</span>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3}
+                  step={0.1}
+                  value={repeat.playbackRate}
+                  onChange={event => {
+                    const next = [...repeatSettings];
+                    next[index] = { ...repeat, playbackRate: Number(event.target.value) };
+                    setRepeatSettings(next);
+                  }}
+                  className="accent-emerald-500"
+                />
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>0.5x</span>
+                  <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
+                  <span>3x</span>
+                </div>
+              </label>
             </div>
-          </label>
+          ))}
         </div>
 
         <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
           <p className="font-semibold text-emerald-200">תצוגה מקדימה</p>
-          <p>6 ההשמעות המתוזמנות יופעלו במרווחים של {gapSeconds} שניות:</p>
+          <p>6 ההשמעות המתוזמנות יופעלו במרווחים מוגדרים מראש עבור כל השמעה:</p>
           <div className="flex flex-wrap gap-2 text-xs text-slate-400">
             {nextPlayTimes.map((seconds, index) => (
               <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
-                השמעה {index + 1}: T+{seconds}s
+                השמעה {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
               </span>
             ))}
           </div>
