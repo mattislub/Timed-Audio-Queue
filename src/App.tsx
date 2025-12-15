@@ -56,26 +56,46 @@ async function fetchRecordings() {
   const offsetMs = serverNow ? serverNow - clientNow : 0;
   const now = serverNow ?? clientNow;
 
-  console.info('[Clock]', {
+  const clockInfo = {
     source: serverNow ? 'server' : 'client',
     serverNow,
     clientNow,
     offsetMs,
     reason: serverNow ? 'date header exposed by server' : 'missing Date header; using client clock',
-  });
+  } as const;
+
+  console.info('[Clock]', clockInfo, `source=${clockInfo.source}; serverNow=${clockInfo.serverNow}; clientNow=${clockInfo.clientNow}; offsetMs=${clockInfo.offsetMs}; reason=${clockInfo.reason}`);
+
+  const mappedRecordings = data
+    .map(
+      item =>
+        ({
+          id: item.id,
+          name: item.file_name,
+          url: item.file_url,
+          createdAt: item.created_at ? new Date(item.created_at).getTime() : now,
+        } satisfies Recording),
+    );
+
+  const expiredRecordings = mappedRecordings.filter(
+    recording => recording.createdAt + RECORDING_TTL_MS <= now,
+  );
+
+  if (expiredRecordings.length > 0) {
+    console.info(
+      '[Recordings] Skipping expired recordings (server-clock aligned)',
+      expiredRecordings.map(recording => ({
+        id: recording.id,
+        name: recording.name,
+        ageSeconds: Math.round((now - recording.createdAt) / 1000),
+        expiresAt: recording.createdAt + RECORDING_TTL_MS,
+        serverNow: now,
+      })),
+    );
+  }
 
   return {
-    recordings: data
-      .map(
-        item =>
-          ({
-            id: item.id,
-            name: item.file_name,
-            url: item.file_url,
-            createdAt: item.created_at ? new Date(item.created_at).getTime() : now,
-          } satisfies Recording),
-      )
-      .filter(recording => recording.createdAt + RECORDING_TTL_MS > now),
+    recordings: mappedRecordings.filter(recording => recording.createdAt + RECORDING_TTL_MS > now),
     serverNow,
   };
 }
