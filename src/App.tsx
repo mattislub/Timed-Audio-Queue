@@ -529,17 +529,12 @@ function App() {
             </button>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {loginView === 'admin' && (
+          <div className="max-w-2xl mx-auto">
+            {loginView === 'admin' ? (
               <AdminLoginCard onLogin={handleAdminLogin} />
-            )}
-            {loginView === 'recorder' && (
+            ) : (
               <RecorderLoginCard recorderUsers={recorderUsers} onLogin={handleRecorderLogin} />
             )}
-            {loginView === 'admin' && (
-              <RecorderLoginCard recorderUsers={recorderUsers} onLogin={handleRecorderLogin} muted />
-            )}
-            {loginView === 'recorder' && <AdminLoginCard onLogin={handleAdminLogin} muted />}
           </div>
         </div>
       </div>
