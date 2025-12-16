@@ -10,7 +10,7 @@ type PlaylistProps = {
 };
 
 type PlaylistItem = Recording & {
-  status: 'scheduled' | 'ready' | 'playing' | 'done' | 'error';
+  status: 'scheduled' | 'ready' | 'queued' | 'playing' | 'done' | 'error';
   playNumber: number;
   scheduledAt: number;
   playbackRate: number;
@@ -199,6 +199,9 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     const currentlyPlayingId = getCurrentlyPlayingId();
 
     if (currentlyPlayingId && currentlyPlayingId !== id) {
+      updateItems(prev =>
+        prev.map(item => (item.id === id ? { ...item, status: 'queued', errorMessage: undefined } : item)),
+      );
       enqueuePlayback(id);
       return;
     }
@@ -426,9 +429,11 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                       ? 'Completed'
                       : item.status === 'scheduled'
                         ? 'Waiting for its time'
-                        : item.status === 'error'
-                          ? 'Error'
-                          : 'Ready'}
+                        : item.status === 'queued'
+                          ? 'Waiting for current playback'
+                          : item.status === 'error'
+                            ? 'Error'
+                            : 'Ready'}
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -441,7 +446,9 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                             ? 'border-rose-500 text-rose-200 bg-rose-500/15'
                             : item.status === 'scheduled'
                               ? 'border-slate-700 text-slate-200 bg-slate-700/20'
-                              : 'border-emerald-400 text-emerald-100 bg-emerald-500/15'
+                              : item.status === 'queued'
+                                ? 'border-amber-400 text-amber-100 bg-amber-500/15'
+                                : 'border-emerald-400 text-emerald-100 bg-emerald-500/15'
                     }`}
                   >
                     {item.status === 'playing'
@@ -452,10 +459,12 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                           ? 'Error'
                           : item.status === 'scheduled'
                             ? 'Scheduled'
-                            : 'Ready'}
+                            : item.status === 'queued'
+                              ? 'Queued'
+                              : 'Ready'}
                   </span>
 
-                  {(item.status === 'ready' || item.status === 'error') && (
+                  {(item.status === 'ready' || item.status === 'queued' || item.status === 'error') && (
                     <button
                       type="button"
                       onClick={() => retryPlay(item.id)}
