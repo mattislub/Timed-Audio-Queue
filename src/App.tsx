@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Cog, ListMusic, Mic2 } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Cog, ListMusic, LogOut, Mic2, Shield, UserRound } from 'lucide-react';
 import Recorder from './components/Recorder';
 import Playlist from './components/Playlist';
 import Settings from './components/Settings';
@@ -21,7 +21,158 @@ export type AppSettings = {
   repeatSettings: RepeatSetting[];
 };
 
+export type RecorderUser = {
+  id: string;
+  username: string;
+  password: string;
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+const STORAGE_KEYS = {
+  adminPassword: 'taq.adminPassword',
+  recorderUsers: 'taq.recorderUsers',
+  role: 'taq.activeRole',
+} as const;
+
+function AdminLoginCard({ onLogin, muted = false }: { onLogin: (password: string) => boolean; muted?: boolean }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const ok = onLogin(password);
+    if (!ok) {
+      setError('Incorrect admin password.');
+      return;
+    }
+    setError(null);
+  };
+
+  return (
+    <section
+      className={`border rounded-2xl p-6 bg-slate-900/70 ${
+        muted ? 'border-slate-900/40 opacity-70' : 'border-emerald-800/40 shadow-lg shadow-emerald-500/10'
+      }`}
+    >
+      <div className="flex items-center gap-2 text-sm text-emerald-200">
+        <Shield className="w-4 h-4" /> Admin area
+      </div>
+      <h2 className="text-xl font-semibold mt-2">Sign in as admin</h2>
+      <p className="text-sm text-slate-400 mb-4">Access the playlist, settings, and user management.</p>
+
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <label className="text-sm text-slate-300 space-y-2 block">
+          <span>Admin password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            disabled={muted}
+            required
+          />
+        </label>
+        {error && <p className="text-sm text-rose-300">{error}</p>}
+        <button
+          type="submit"
+          disabled={muted}
+          className="w-full px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition text-white font-semibold disabled:opacity-60"
+        >
+          Login as admin
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function RecorderLoginCard({
+  recorderUsers,
+  onLogin,
+  muted = false,
+}: {
+  recorderUsers: RecorderUser[];
+  onLogin: (username: string, password: string) => boolean;
+  muted?: boolean;
+}) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const ok = onLogin(username, password);
+    if (!ok) {
+      setError('Username or password are incorrect.');
+      return;
+    }
+    setError(null);
+  };
+
+  return (
+    <section
+      className={`border rounded-2xl p-6 bg-slate-900/70 ${
+        muted ? 'border-slate-900/40 opacity-70' : 'border-emerald-800/40 shadow-lg shadow-emerald-500/10'
+      }`}
+    >
+      <div className="flex items-center gap-2 text-sm text-emerald-200">
+        <UserRound className="w-4 h-4" /> Recorder access
+      </div>
+      <h2 className="text-xl font-semibold mt-2">Login for recording only</h2>
+      <p className="text-sm text-slate-400 mb-4">Captures audio without exposing playlist or settings.</p>
+
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <label className="text-sm text-slate-300 space-y-2 block">
+          <span>Username</span>
+          <input
+            type="text"
+            value={username}
+            onChange={event => setUsername(event.target.value)}
+            className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            disabled={muted}
+            required
+          />
+        </label>
+        <label className="text-sm text-slate-300 space-y-2 block">
+          <span>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            disabled={muted}
+            required
+          />
+        </label>
+        {error && <p className="text-sm text-rose-300">{error}</p>}
+        <button
+          type="submit"
+          disabled={muted}
+          className="w-full px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition text-white font-semibold disabled:opacity-60"
+        >
+          Login for recording
+        </button>
+      </form>
+
+      <div className="mt-4 text-xs text-slate-400">
+        {recorderUsers.length === 0 ? (
+          <p>No recorder accounts created yet. Ask an admin to add users from Settings.</p>
+        ) : (
+          <div className="space-y-1">
+            <p className="font-semibold text-slate-300">Available usernames:</p>
+            <ul className="list-disc list-inside space-y-1">
+              {recorderUsers.map(user => (
+                <li key={user.id} className="text-slate-400">
+                  <span className="font-semibold text-emerald-200">{user.username}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function buildApiUrl(path: string) {
   if (!API_BASE_URL) return '';
@@ -128,6 +279,30 @@ function App() {
       { gapSeconds: 30, playbackRate: 1 },
     ],
   });
+  const [adminPassword, setAdminPassword] = useState<string>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.adminPassword) : null;
+    return stored || 'admin123';
+  });
+  const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem(STORAGE_KEYS.recorderUsers);
+    if (!stored) return [];
+
+    try {
+      const parsed = JSON.parse(stored) as RecorderUser[];
+      if (Array.isArray(parsed)) return parsed;
+    } catch (error) {
+      console.warn('Failed to parse recorder users from storage', error);
+    }
+
+    return [];
+  });
+  const [role, setRole] = useState<'admin' | 'recorder' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(STORAGE_KEYS.role);
+    return stored === 'admin' || stored === 'recorder' ? stored : null;
+  });
+  const [loginView, setLoginView] = useState<'admin' | 'recorder'>('admin');
 
   useEffect(() => {
     let isMounted = true;
@@ -166,6 +341,114 @@ function App() {
     return 'Set it once and everything runs automatically';
   }, [activePage]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.adminPassword, adminPassword);
+    }
+  }, [adminPassword]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.recorderUsers, JSON.stringify(recorderUsers));
+    }
+  }, [recorderUsers]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (role) {
+        localStorage.setItem(STORAGE_KEYS.role, role);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.role);
+      }
+    }
+  }, [role]);
+
+  const handleAdminLogin = (password: string) => {
+    if (password.trim() === adminPassword) {
+      setRole('admin');
+      return true;
+    }
+    return false;
+  };
+
+  const handleRecorderLogin = (username: string, password: string) => {
+    const match = recorderUsers.find(
+      user => user.username.trim().toLowerCase() === username.trim().toLowerCase() && user.password === password,
+    );
+
+    if (match) {
+      setRole('recorder');
+      return true;
+    }
+    return false;
+  };
+
+  const logout = () => {
+    setRole(null);
+    setActivePage('record');
+    setLoginView('admin');
+  };
+
+  const isRecorderOnly = role === 'recorder';
+  const effectivePage = isRecorderOnly ? 'record' : activePage;
+
+  if (!role) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center px-6 py-12">
+        <div className="max-w-4xl w-full space-y-8">
+          <div className="text-center space-y-2">
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+              <Mic2 className="w-6 h-6" />
+            </div>
+            <p className="text-sm text-emerald-200 uppercase tracking-[0.2em]">Timed Audio Queue</p>
+            <h1 className="text-3xl font-semibold">Welcome back</h1>
+            <p className="text-slate-300">Sign in as an admin to manage settings or as a recorder to capture audio only.</p>
+          </div>
+
+          <div className="flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setLoginView('admin')}
+              className={`px-4 py-2 rounded-full border ${
+                loginView === 'admin'
+                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white'
+              }`}
+            >
+              <Shield className="inline w-4 h-4 mr-2" />
+              Admin login
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginView('recorder')}
+              className={`px-4 py-2 rounded-full border ${
+                loginView === 'recorder'
+                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white'
+              }`}
+            >
+              <UserRound className="inline w-4 h-4 mr-2" />
+              Recorder login
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {loginView === 'admin' && (
+              <AdminLoginCard onLogin={handleAdminLogin} />
+            )}
+            {loginView === 'recorder' && (
+              <RecorderLoginCard recorderUsers={recorderUsers} onLogin={handleRecorderLogin} />
+            )}
+            {loginView === 'admin' && (
+              <RecorderLoginCard recorderUsers={recorderUsers} onLogin={handleRecorderLogin} muted />
+            )}
+            {loginView === 'recorder' && <AdminLoginCard onLogin={handleAdminLogin} muted />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
       <header className="border-b border-slate-900/60 bg-slate-900/70 backdrop-blur sticky top-0 z-20">
@@ -180,54 +463,90 @@ function App() {
               <p className="text-sm text-slate-300">{subtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm bg-slate-900/70 border border-slate-800 rounded-full p-1 shadow-inner">
-            <button
-              onClick={() => setActivePage('record')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
-                activePage === 'record'
-                  ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Mic2 className="w-4 h-4" />
-              Record
-            </button>
-            <button
-              onClick={() => setActivePage('playlist')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
-                activePage === 'playlist'
-                  ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <ListMusic className="w-4 h-4" />
-              Plays
-            </button>
-            <button
-              onClick={() => setActivePage('settings')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
-                activePage === 'settings'
-                  ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Cog className="w-4 h-4" />
-              Settings
-            </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm bg-slate-900/70 border border-slate-800 rounded-full p-1 shadow-inner">
+              <button
+                onClick={() => setActivePage('record')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
+                  effectivePage === 'record'
+                    ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Mic2 className="w-4 h-4" />
+                Record
+              </button>
+              {!isRecorderOnly && (
+                <>
+                  <button
+                    onClick={() => setActivePage('playlist')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
+                      effectivePage === 'playlist'
+                        ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <ListMusic className="w-4 h-4" />
+                    Plays
+                  </button>
+                  <button
+                    onClick={() => setActivePage('settings')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition ${
+                      effectivePage === 'settings'
+                        ? 'bg-emerald-500/20 text-emerald-100 shadow-lg shadow-emerald-500/20'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Cog className="w-4 h-4" />
+                    Settings
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/60 border border-slate-800 rounded-full px-3 py-1">
+              {isRecorderOnly ? (
+                <>
+                  <UserRound className="w-4 h-4 text-emerald-300" />
+                  Recorder access
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4 text-emerald-300" />
+                  Admin access
+                </>
+              )}
+              <span className="text-slate-700">|</span>
+              <button onClick={logout} className="flex items-center gap-1 text-slate-200 hover:text-white">
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
-        <div className={activePage === 'record' ? 'block' : 'hidden'} aria-hidden={activePage !== 'record'}>
+        <div className={effectivePage === 'record' ? 'block' : 'hidden'} aria-hidden={effectivePage !== 'record'}>
           <Recorder onRecordingSaved={refreshRecordings} settings={settings} />
         </div>
-        <div className={activePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={activePage !== 'playlist'}>
-          <Playlist recordings={recordings} settings={settings} serverOffsetMs={serverOffsetMs} />
-        </div>
-        <div className={activePage === 'settings' ? 'block' : 'hidden'} aria-hidden={activePage !== 'settings'}>
-          <Settings settings={settings} onChange={setSettings} />
-        </div>
+        {!isRecorderOnly && (
+          <>
+            <div className={effectivePage === 'playlist' ? 'block' : 'hidden'} aria-hidden={effectivePage !== 'playlist'}>
+              <Playlist recordings={recordings} settings={settings} serverOffsetMs={serverOffsetMs} />
+            </div>
+            <div className={effectivePage === 'settings' ? 'block' : 'hidden'} aria-hidden={effectivePage !== 'settings'}>
+              <Settings
+                settings={settings}
+                onChange={setSettings}
+                adminPassword={adminPassword}
+                onAdminPasswordChange={setAdminPassword}
+                recorderUsers={recorderUsers}
+                onRecorderUsersChange={setRecorderUsers}
+              />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

@@ -1,13 +1,24 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { AppSettings, RepeatSetting } from '../App';
+import { AppSettings, RecorderUser, RepeatSetting } from '../App';
 
 type SettingsProps = {
   settings: AppSettings;
   onChange: (settings: AppSettings) => void;
+  adminPassword: string;
+  onAdminPasswordChange: (password: string) => void;
+  recorderUsers: RecorderUser[];
+  onRecorderUsersChange: (users: RecorderUser[]) => void;
 };
 
-function Settings({ settings, onChange }: SettingsProps) {
+function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, recorderUsers, onRecorderUsersChange }: SettingsProps) {
   const [repeatSettings, setRepeatSettings] = useState<RepeatSetting[]>(settings.repeatSettings);
+  const [activeTab, setActiveTab] = useState<'playback' | 'auth'>('playback');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [adminPasswordMessage, setAdminPasswordMessage] = useState<string | null>(null);
+  const [recorderUsername, setRecorderUsername] = useState('');
+  const [recorderPassword, setRecorderPassword] = useState('');
+  const [recorderMessage, setRecorderMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setRepeatSettings(settings.repeatSettings);
@@ -27,6 +38,59 @@ function Settings({ settings, onChange }: SettingsProps) {
     onChange({ repeatSettings: sanitizedRepeats });
   };
 
+  const generatePassword = () => Math.random().toString(36).slice(-10);
+
+  const handleAdminPasswordSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!newAdminPassword || !confirmAdminPassword) {
+      setAdminPasswordMessage('נא להזין סיסמה ולאשר אותה.');
+      return;
+    }
+
+    if (newAdminPassword !== confirmAdminPassword) {
+      setAdminPasswordMessage('הסיסמאות אינן תואמות.');
+      return;
+    }
+
+    onAdminPasswordChange(newAdminPassword);
+    setAdminPasswordMessage('הסיסמה עודכנה בהצלחה.');
+    setNewAdminPassword('');
+    setConfirmAdminPassword('');
+  };
+
+  const handleAddRecorderUser = (event: FormEvent) => {
+    event.preventDefault();
+    if (!recorderUsername || !recorderPassword) {
+      setRecorderMessage('יש להזין שם משתמש וסיסמה.');
+      return;
+    }
+
+    const usernameExists = recorderUsers.some(
+      user => user.username.trim().toLowerCase() === recorderUsername.trim().toLowerCase(),
+    );
+
+    if (usernameExists) {
+      setRecorderMessage('שם המשתמש כבר קיים.');
+      return;
+    }
+
+    const user: RecorderUser = {
+      id: crypto.randomUUID(),
+      username: recorderUsername.trim(),
+      password: recorderPassword,
+    };
+
+    onRecorderUsersChange([...recorderUsers, user]);
+    setRecorderUsername('');
+    setRecorderPassword('');
+    setRecorderMessage('משתמש נוצר בהצלחה.');
+  };
+
+  const handleRemoveUser = (id: string) => {
+    const updated = recorderUsers.filter(user => user.id !== id);
+    onRecorderUsersChange(updated);
+  };
+
   const nextPlayTimes = useMemo(() => {
     const times: number[] = [];
     let total = 0;
@@ -39,120 +103,274 @@ function Settings({ settings, onChange }: SettingsProps) {
 
   return (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-emerald-200">Scheduling settings</p>
-          <h2 className="text-2xl font-semibold">Quick configuration</h2>
-          <p className="text-sm text-slate-400">Choose a gap and speed for each of the six plays.</p>
+          <p className="text-sm text-emerald-200">Settings</p>
+          <h2 className="text-2xl font-semibold">Control the experience</h2>
+          <p className="text-sm text-slate-400">Manage scheduling and authentication.</p>
         </div>
-        <div className="text-right text-sm text-slate-300">
-          <p className="text-xs text-slate-500">Default</p>
-          <p>First play immediately, then a 30-second gap | Speed 1x</p>
+        <div className="flex bg-slate-900/60 border border-slate-800 rounded-full p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setActiveTab('playback')}
+            className={`px-4 py-2 rounded-full ${
+              activeTab === 'playback'
+                ? 'bg-emerald-500/20 text-emerald-100 shadow-inner shadow-emerald-500/20'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            תזמונים
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('auth')}
+            className={`px-4 py-2 rounded-full ${
+              activeTab === 'auth'
+                ? 'bg-emerald-500/20 text-emerald-100 shadow-inner shadow-emerald-500/20'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            התחברות
+          </button>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/40 shadow-inner">
-          <table className="min-w-full text-sm text-slate-300">
-            <thead className="bg-slate-800/70 text-slate-100 text-xs uppercase tracking-wider">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  Play
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  Gap (seconds)
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  Playback speed
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">
-                  Estimated result
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {repeatSettings.map((repeat, index) => (
-                <tr key={index} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="px-4 py-4 align-top">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-base font-semibold text-emerald-200">Play {index + 1}</span>
-                      <span className="text-xs text-slate-500">Time until this play</span>
-                      <span className="text-xs text-slate-400">T+{nextPlayTimes[index]}s</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <label className="flex flex-col gap-2">
-                      <span className="text-xs text-slate-400">Gap in seconds until play {index + 1}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={repeat.gapSeconds}
-                        onChange={event => {
-                          const next = [...repeatSettings];
-                          next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
-                          setRepeatSettings(next);
-                        }}
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
-                      />
-                    </label>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <label className="flex flex-col gap-3">
-                      <span className="text-xs text-slate-400">Select speed</span>
-                      <input
-                        type="range"
-                        min={0.5}
-                        max={3}
-                        step={0.1}
-                        value={repeat.playbackRate}
-                        onChange={event => {
-                          const next = [...repeatSettings];
-                          next[index] = { ...repeat, playbackRate: Number(event.target.value) };
-                          setRepeatSettings(next);
-                        }}
-                        className="accent-emerald-500"
-                      />
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>0.5x</span>
-                        <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
-                        <span>3x</span>
-                      </div>
-                    </label>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-                      <span className="text-emerald-200 font-semibold">T+{nextPlayTimes[index]}s</span>
-                      <span className="text-slate-500">|</span>
-                      <span>{repeat.playbackRate.toFixed(1)}x</span>
-                    </div>
-                  </td>
+      {activeTab === 'playback' && (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/40 shadow-inner">
+            <table className="min-w-full text-sm text-slate-300">
+              <thead className="bg-slate-800/70 text-slate-100 text-xs uppercase tracking-wider">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    Play
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    Gap (seconds)
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    Playback speed
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    Estimated result
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {repeatSettings.map((repeat, index) => (
+                  <tr key={index} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-4 align-top">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-base font-semibold text-emerald-200">Play {index + 1}</span>
+                        <span className="text-xs text-slate-500">Time until this play</span>
+                        <span className="text-xs text-slate-400">T+{nextPlayTimes[index]}s</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <label className="flex flex-col gap-2">
+                        <span className="text-xs text-slate-400">Gap in seconds until play {index + 1}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={repeat.gapSeconds}
+                          onChange={event => {
+                            const next = [...repeatSettings];
+                            next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
+                            setRepeatSettings(next);
+                          }}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
+                        />
+                      </label>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <label className="flex flex-col gap-3">
+                        <span className="text-xs text-slate-400">Select speed</span>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={3}
+                          step={0.1}
+                          value={repeat.playbackRate}
+                          onChange={event => {
+                            const next = [...repeatSettings];
+                            next[index] = { ...repeat, playbackRate: Number(event.target.value) };
+                            setRepeatSettings(next);
+                          }}
+                          className="accent-emerald-500"
+                        />
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>0.5x</span>
+                          <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
+                          <span>3x</span>
+                        </div>
+                      </label>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                        <span className="text-emerald-200 font-semibold">T+{nextPlayTimes[index]}s</span>
+                        <span className="text-slate-500">|</span>
+                        <span>{repeat.playbackRate.toFixed(1)}x</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
-          <p className="font-semibold text-emerald-200">Preview</p>
-          <p>The 6 scheduled plays will run at the predefined intervals for each play:</p>
-          <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-            {nextPlayTimes.map((seconds, index) => (
-              <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
-                Play {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
-              </span>
-            ))}
+          <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
+            <p className="font-semibold text-emerald-200">Preview</p>
+            <p>The 6 scheduled plays will run at the predefined intervals for each play:</p>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+              {nextPlayTimes.map((seconds, index) => (
+                <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
+                  Play {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition border border-emerald-500 text-white font-semibold"
+            >
+              Save settings
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeTab === 'auth' && (
+        <div className="space-y-6">
+          <form onSubmit={handleAdminPasswordSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div>
+              <p className="text-sm text-emerald-200">Admin login</p>
+              <h3 className="text-lg font-semibold">הגדרת סיסמה למנהל</h3>
+              <p className="text-sm text-slate-400">הסיסמה מגבילה גישה להגדרות ולתורים.</p>
+              <p className="text-xs text-slate-500 mt-1">Current password: <span className="text-emerald-200">{adminPassword || 'לא הוגדר'}</span></p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <label className="space-y-2 text-sm text-slate-200">
+                <span>סיסמה חדשה</span>
+                <input
+                  type="password"
+                  value={newAdminPassword}
+                  onChange={event => setNewAdminPassword(event.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-200">
+                <span>אישור סיסמה</span>
+                <input
+                  type="password"
+                  value={confirmAdminPassword}
+                  onChange={event => setConfirmAdminPassword(event.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </label>
+            </div>
+            {adminPasswordMessage && <p className="text-sm text-emerald-200">{adminPasswordMessage}</p>}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold"
+              >
+                שמירת סיסמה
+              </button>
+            </div>
+          </form>
+
+          <form onSubmit={handleAddRecorderUser} className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div>
+              <p className="text-sm text-emerald-200">משתמשי הקלטה בלבד</p>
+              <h3 className="text-lg font-semibold">יצירת משתמש לדף ההקלטה</h3>
+              <p className="text-sm text-slate-400">משתמשים אלו יכנסו לדף נפרד עם גישה להקלטה בלבד.</p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              <label className="space-y-2 text-sm text-slate-200">
+                <span>שם משתמש</span>
+                <input
+                  type="text"
+                  value={recorderUsername}
+                  onChange={event => setRecorderUsername(event.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-200">
+                <span>סיסמה</span>
+                <input
+                  type="text"
+                  value={recorderPassword}
+                  onChange={event => setRecorderPassword(event.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => setRecorderPassword(generatePassword())}
+                  className="w-full px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100"
+                >
+                  הפקת סיסמה אקראית
+                </button>
+              </div>
+            </div>
+
+            {recorderMessage && <p className="text-sm text-emerald-200">{recorderMessage}</p>}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold"
+              >
+                יצירת משתמש
+              </button>
+            </div>
+          </form>
+
+          <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-emerald-200">רשימת משתמשים</p>
+                <h3 className="text-lg font-semibold">ניהול חשבונות הקלטה</h3>
+              </div>
+              <p className="text-xs text-slate-500">מספר חשבונות: {recorderUsers.length}</p>
+            </div>
+
+            {recorderUsers.length === 0 ? (
+              <p className="text-sm text-slate-400">לא נוצרו משתמשים עדיין.</p>
+            ) : (
+              <div className="space-y-2">
+                {recorderUsers.map(user => (
+                  <div
+                    key={user.id}
+                    className="flex flex-wrap items-center justify-between gap-3 border border-slate-800 rounded-lg px-4 py-3 bg-slate-950/40"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-200">{user.username}</p>
+                      <p className="text-xs text-slate-400">סיסמה: {user.password}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveUser(user.id)}
+                      className="text-sm text-rose-300 hover:text-rose-200"
+                    >
+                      מחיקה
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition border border-emerald-500 text-white font-semibold"
-          >
-            Save settings
-          </button>
-        </div>
-      </form>
+      )}
     </section>
   );
 }
