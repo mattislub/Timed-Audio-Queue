@@ -217,6 +217,12 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     }
   };
 
+  useEffect(() => {
+    if (!getCurrentlyPlayingId() && playbackQueueRef.current.length > 0) {
+      startNextInQueue();
+    }
+  }, [items]);
+
   const retryPendingAutoplay = useCallback(() => {
     const pending = Array.from(pendingAutoplayRef.current);
     pendingAutoplayRef.current.clear();
