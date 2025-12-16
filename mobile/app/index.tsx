@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -16,8 +17,11 @@ import {
   createRemoteSound,
   deleteRemoteSound,
   fetchRemoteSounds,
+  fetchAuthState,
   uploadBase64Recording,
+  RecorderUser,
 } from '../lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Recording {
   id: string;
@@ -27,6 +31,8 @@ interface Recording {
   isPlaying: boolean;
 }
 
+const STORAGE_KEY = 'audio-queue/session';
+
 export default function HomeScreen() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -34,11 +40,25 @@ export default function HomeScreen() {
   const [soundObject, setSoundObject] = useState<Audio.Sound | null>(null);
   const [loading, setLoading] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>([]);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   useEffect(() => {
-    loadRecordings();
     setupAudio();
+    loadAuthState();
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      loadRecordings();
+    } else {
+      setRecordings([]);
+    }
+  }, [currentUser]);
 
   const setupAudio = async () => {
     await Audio.requestPermissionsAsync();
@@ -49,7 +69,39 @@ export default function HomeScreen() {
     });
   };
 
+  const loadAuthState = async () => {
+    try {
+      setAuthLoading(true);
+      setAuthError(null);
+      const state = await fetchAuthState();
+      setRecorderUsers(state.recorderUsers || []);
+
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.username && parsed?.password) {
+          const match = state.recorderUsers.find(
+            (user) =>
+              user.username.trim().toLowerCase() === parsed.username.trim().toLowerCase() &&
+              user.password === parsed.password
+          );
+
+          if (match) {
+            setCurrentUser(match.username);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading auth state:', error);
+      setAuthError('Failed to load login settings from the server.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const loadRecordings = async () => {
+    if (!currentUser) return;
+
     try {
       const data = await fetchRemoteSounds();
       setRecordings(
@@ -67,6 +119,11 @@ export default function HomeScreen() {
   };
 
   const startRecording = async () => {
+    if (!currentUser) {
+      Alert.alert('דרושה התחברות', 'התחבר לפני הקלטה חדשה.');
+      return;
+    }
+
     try {
       const newRecording = new Audio.Recording();
       await newRecording.prepareToRecordAsync({
@@ -120,10 +177,12 @@ export default function HomeScreen() {
       setIsRecording(false);
       setRecordingObject(null);
 
+      const status = await recordingObject.getStatusAsync();
+
       const newRecording: Recording = {
         id: filename,
         uri,
-        duration: 0,
+        duration: status.isDoneRecording ? (status.durationMillis ?? 0) / 1000 : 0,
         filename,
         isPlaying: false,
       };
@@ -137,6 +196,8 @@ export default function HomeScreen() {
   };
 
   const uploadRecording = async (recording: Recording) => {
+    if (!currentUser) return;
+
     try {
       setLoading(true);
 
@@ -203,10 +264,105 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      Alert.alert('שגיאה', 'נא להזין שם משתמש וסיסמה');
+      return;
+    }
+
+    const match = recorderUsers.find(
+      (user) =>
+        user.username.trim().toLowerCase() === username.trim().toLowerCase() &&
+        user.password === password
+    );
+
+    if (!match) {
+      Alert.alert('התחברות נכשלה', 'שם המשתמש או הסיסמה אינם נכונים.');
+      return;
+    }
+
+    setCurrentUser(match.username);
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ username: match.username, password })
+    );
+  };
+
+  const handleLogout = async () => {
+    setCurrentUser(null);
+    setUsername('');
+    setPassword('');
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  };
+
+  if (authLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.content, styles.centered]}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>טוען נתוני התחברות...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={[styles.contentPadding, styles.centered]}>
+          <View style={styles.authCard}>
+            <View style={styles.headerRow}>
+              <Mic size={22} color="#2563eb" />
+              <Text style={styles.title}>Audio Queue</Text>
+            </View>
+            <Text style={styles.authSubtitle}>התחבר כדי להעלות הקלטות ישירות לשרת</Text>
+
+            {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
+            {recorderUsers.length === 0 ? (
+              <Text style={styles.errorText}>אין משתמשי מקליטים זמינים בשרת.</Text>
+            ) : null}
+
+            <TextInput
+              style={styles.input}
+              placeholder="שם משתמש"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="סיסמה"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <TouchableOpacity
+              style={[styles.loginButton, (!username || !password || recorderUsers.length === 0) && styles.disabledButton]}
+              onPress={handleLogin}
+              disabled={!username || !password || recorderUsers.length === 0}
+            >
+              <Text style={styles.loginButtonText}>התחבר</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Audio Queue</Text>
+        <View style={styles.headerRow}>
+          <Mic size={22} color="#2563eb" />
+          <Text style={styles.title}>Audio Queue</Text>
+        </View>
+        <View style={styles.userBadge}>
+          <Text style={styles.userText}>{currentUser}</Text>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={styles.logoutText}>התנתק</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
@@ -302,17 +458,91 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1f2937',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  userBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  userText: {
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  logoutText: {
+    color: '#2563eb',
+    fontWeight: '600',
+  },
   content: {
     flex: 1,
   },
   contentPadding: {
     padding: 16,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  authCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+    gap: 12,
+  },
+  authSubtitle: {
+    color: '#4b5563',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  loginButton: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  errorText: {
+    color: '#ef4444',
   },
   recordingSection: {
     marginBottom: 32,
@@ -400,6 +630,10 @@ const styles = StyleSheet.create({
   },
   actionButtonActive: {
     backgroundColor: '#dbeafe',
+  },
+  loadingText: {
+    color: '#1f2937',
+    fontWeight: '500',
   },
   loadingOverlay: {
     position: 'absolute',
