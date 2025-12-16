@@ -5,9 +5,9 @@ type SettingsProps = {
   settings: AppSettings;
   onChange: (settings: AppSettings) => void;
   adminPassword: string;
-  onAdminPasswordChange: (password: string) => void;
+  onAdminPasswordChange: (password: string) => Promise<boolean>;
   recorderUsers: RecorderUser[];
-  onRecorderUsersChange: (users: RecorderUser[]) => void;
+  onRecorderUsersChange: (users: RecorderUser[]) => Promise<boolean>;
 };
 
 function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, recorderUsers, onRecorderUsersChange }: SettingsProps) {
@@ -19,6 +19,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
   const [recorderUsername, setRecorderUsername] = useState('');
   const [recorderPassword, setRecorderPassword] = useState('');
   const [recorderMessage, setRecorderMessage] = useState<string | null>(null);
+  const [authSaving, setAuthSaving] = useState(false);
 
   useEffect(() => {
     setRepeatSettings(settings.repeatSettings);
@@ -40,7 +41,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
 
   const generatePassword = () => Math.random().toString(36).slice(-10);
 
-  const handleAdminPasswordSubmit = (event: FormEvent) => {
+  const handleAdminPasswordSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!newAdminPassword || !confirmAdminPassword) {
       setAdminPasswordMessage('נא להזין סיסמה ולאשר אותה.');
@@ -52,13 +53,21 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
       return;
     }
 
-    onAdminPasswordChange(newAdminPassword);
+    setAuthSaving(true);
+    const ok = await onAdminPasswordChange(newAdminPassword);
+    setAuthSaving(false);
+
+    if (!ok) {
+      setAdminPasswordMessage('שמירת הסיסמה נכשלה.');
+      return;
+    }
+
     setAdminPasswordMessage('הסיסמה עודכנה בהצלחה.');
     setNewAdminPassword('');
     setConfirmAdminPassword('');
   };
 
-  const handleAddRecorderUser = (event: FormEvent) => {
+  const handleAddRecorderUser = async (event: FormEvent) => {
     event.preventDefault();
     if (!recorderUsername || !recorderPassword) {
       setRecorderMessage('יש להזין שם משתמש וסיסמה.');
@@ -80,15 +89,30 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
       password: recorderPassword,
     };
 
-    onRecorderUsersChange([...recorderUsers, user]);
+    setAuthSaving(true);
+    const ok = await onRecorderUsersChange([...recorderUsers, user]);
+    setAuthSaving(false);
+
+    if (!ok) {
+      setRecorderMessage('שמירת המשתמש נכשלה.');
+      return;
+    }
+
     setRecorderUsername('');
     setRecorderPassword('');
     setRecorderMessage('משתמש נוצר בהצלחה.');
   };
 
-  const handleRemoveUser = (id: string) => {
+  const handleRemoveUser = async (id: string) => {
     const updated = recorderUsers.filter(user => user.id !== id);
-    onRecorderUsersChange(updated);
+
+    setAuthSaving(true);
+    const ok = await onRecorderUsersChange(updated);
+    setAuthSaving(false);
+
+    if (!ok) {
+      setRecorderMessage('מחיקת המשתמש נכשלה.');
+    }
   };
 
   const nextPlayTimes = useMemo(() => {
@@ -277,7 +301,8 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold"
+                disabled={authSaving}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold disabled:opacity-60"
               >
                 שמירת סיסמה
               </button>
@@ -316,7 +341,8 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 <button
                   type="button"
                   onClick={() => setRecorderPassword(generatePassword())}
-                  className="w-full px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100"
+                  disabled={authSaving}
+                  className="w-full px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 disabled:opacity-60"
                 >
                   הפקת סיסמה אקראית
                 </button>
@@ -328,7 +354,8 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold"
+                disabled={authSaving}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold disabled:opacity-60"
               >
                 יצירת משתמש
               </button>
@@ -360,7 +387,8 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                     <button
                       type="button"
                       onClick={() => handleRemoveUser(user.id)}
-                      className="text-sm text-rose-300 hover:text-rose-200"
+                      disabled={authSaving}
+                      className="text-sm text-rose-300 hover:text-rose-200 disabled:opacity-60"
                     >
                       מחיקה
                     </button>
