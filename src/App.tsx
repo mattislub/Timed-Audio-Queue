@@ -27,11 +27,19 @@ export type RecorderUser = {
   password: string;
 };
 
+type AuthState = {
+  adminPassword: string;
+  recorderUsers: RecorderUser[];
+};
+
+const defaultAuthState: AuthState = {
+  adminPassword: 'admin123',
+  recorderUsers: [],
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
 const STORAGE_KEYS = {
-  adminPassword: 'taq.adminPassword',
-  recorderUsers: 'taq.recorderUsers',
   role: 'taq.activeRole',
 } as const;
 
@@ -183,6 +191,60 @@ function buildApiUrl(path: string) {
   return `${baseWithApi}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+async function fetchAuthStateFromServer(): Promise<AuthState> {
+  if (!API_BASE_URL) {
+    return defaultAuthState;
+  }
+
+  try {
+    const response = await fetch(buildApiUrl('/auth'));
+    if (!response.ok) {
+      console.error('[Auth] Failed to load auth state', response.status, response.statusText);
+      return defaultAuthState;
+    }
+
+    const data = (await response.json()) as Partial<AuthState>;
+    return {
+      adminPassword: typeof data.adminPassword === 'string' ? data.adminPassword : defaultAuthState.adminPassword,
+      recorderUsers: Array.isArray(data.recorderUsers)
+        ? data.recorderUsers.map(user => ({
+            id: user.id || crypto.randomUUID(),
+            username: user.username ?? '',
+            password: user.password ?? '',
+          }))
+        : defaultAuthState.recorderUsers,
+    };
+  } catch (error) {
+    console.error('[Auth] Error fetching auth state', error);
+    return defaultAuthState;
+  }
+}
+
+async function saveAuthStateToServer(state: AuthState): Promise<AuthState | null> {
+  if (!API_BASE_URL) {
+    return state;
+  }
+
+  try {
+    const response = await fetch(buildApiUrl('/auth'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    });
+
+    if (!response.ok) {
+      console.error('[Auth] Failed to persist auth state', response.status, response.statusText);
+      return null;
+    }
+
+    const data = (await response.json()) as AuthState;
+    return data;
+  } catch (error) {
+    console.error('[Auth] Error saving auth state', error);
+    return null;
+  }
+}
+
 async function fetchRecordings() {
   if (!API_BASE_URL) {
     return { recordings: [], serverNow: undefined };
@@ -279,30 +341,34 @@ function App() {
       { gapSeconds: 30, playbackRate: 1 },
     ],
   });
-  const [adminPassword, setAdminPassword] = useState<string>(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.adminPassword) : null;
-    return stored || 'admin123';
-  });
-  const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>(() => {
-    if (typeof window === 'undefined') return [];
-    const stored = localStorage.getItem(STORAGE_KEYS.recorderUsers);
-    if (!stored) return [];
-
-    try {
-      const parsed = JSON.parse(stored) as RecorderUser[];
-      if (Array.isArray(parsed)) return parsed;
-    } catch (error) {
-      console.warn('Failed to parse recorder users from storage', error);
-    }
-
-    return [];
-  });
+  const [adminPassword, setAdminPassword] = useState<string>(defaultAuthState.adminPassword);
+  const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>(defaultAuthState.recorderUsers);
   const [role, setRole] = useState<'admin' | 'recorder' | null>(() => {
     if (typeof window === 'undefined') return null;
     const stored = localStorage.getItem(STORAGE_KEYS.role);
     return stored === 'admin' || stored === 'recorder' ? stored : null;
   });
   const [loginView, setLoginView] = useState<'admin' | 'recorder'>('admin');
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAuth = async () => {
+      const state = await fetchAuthStateFromServer();
+      if (!cancelled) {
+        setAdminPassword(state.adminPassword);
+        setRecorderUsers(state.recorderUsers);
+        setAuthLoading(false);
+      }
+    };
+
+    loadAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -343,18 +409,6 @@ function App() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.adminPassword, adminPassword);
-    }
-  }, [adminPassword]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.recorderUsers, JSON.stringify(recorderUsers));
-    }
-  }, [recorderUsers]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
       if (role) {
         localStorage.setItem(STORAGE_KEYS.role, role);
       } else {
@@ -362,6 +416,27 @@ function App() {
       }
     }
   }, [role]);
+
+  const persistAuthState = async (nextAuth: AuthState) => {
+    const previousState: AuthState = {
+      adminPassword,
+      recorderUsers,
+    };
+
+    setAdminPassword(nextAuth.adminPassword);
+    setRecorderUsers(nextAuth.recorderUsers);
+
+    const saved = await saveAuthStateToServer(nextAuth);
+    if (saved) {
+      setAdminPassword(saved.adminPassword);
+      setRecorderUsers(saved.recorderUsers);
+      return true;
+    }
+
+    setAdminPassword(previousState.adminPassword);
+    setRecorderUsers(previousState.recorderUsers);
+    return false;
+  };
 
   const handleAdminLogin = (password: string) => {
     if (password.trim() === adminPassword) {
@@ -383,6 +458,16 @@ function App() {
     return false;
   };
 
+  const handleAdminPasswordChange = async (password: string) => {
+    const success = await persistAuthState({ adminPassword: password, recorderUsers });
+    return success;
+  };
+
+  const handleRecorderUsersChange = async (users: RecorderUser[]) => {
+    const success = await persistAuthState({ adminPassword, recorderUsers: users });
+    return success;
+  };
+
   const logout = () => {
     setRole(null);
     setActivePage('record');
@@ -391,6 +476,18 @@ function App() {
 
   const isRecorderOnly = role === 'recorder';
   const effectivePage = isRecorderOnly ? 'record' : activePage;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center px-6 py-12">
+        <div className="text-center space-y-3">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/30 animate-pulse" />
+          <p className="text-lg font-semibold text-emerald-100">טוען נתוני משתמשים...</p>
+          <p className="text-sm text-slate-400">אנא המתן בזמן שהשרת מחזיר את הגדרות הכניסה.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!role) {
     return (
@@ -540,9 +637,9 @@ function App() {
                 settings={settings}
                 onChange={setSettings}
                 adminPassword={adminPassword}
-                onAdminPasswordChange={setAdminPassword}
+                onAdminPasswordChange={handleAdminPasswordChange}
                 recorderUsers={recorderUsers}
-                onRecorderUsersChange={setRecorderUsers}
+                onRecorderUsersChange={handleRecorderUsersChange}
               />
             </div>
           </>

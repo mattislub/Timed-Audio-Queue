@@ -6,6 +6,7 @@ import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,69 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 const logsDir = path.join(__dirname, '..', 'logs');
 fs.mkdirSync(logsDir, { recursive: true });
 const sessionLogPath = path.join(logsDir, 'session.log');
+
+const authStorePath = path.join(__dirname, 'auth-store.json');
+const defaultAuthState = {
+  adminPassword: 'admin123',
+  recorderUsers: [],
+};
+
+async function readAuthState() {
+  try {
+    const content = await fs.promises.readFile(authStorePath, 'utf8');
+    const parsed = JSON.parse(content);
+
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.adminPassword === 'string' &&
+      Array.isArray(parsed.recorderUsers)
+    ) {
+      const sanitizedUsers = parsed.recorderUsers
+        .filter(user => user && typeof user.username === 'string' && typeof user.password === 'string')
+        .map(user => ({
+          id: user.id || crypto.randomUUID(),
+          username: user.username,
+          password: user.password,
+        }));
+
+      return {
+        adminPassword: parsed.adminPassword || defaultAuthState.adminPassword,
+        recorderUsers: sanitizedUsers,
+      };
+    }
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code !== 'ENOENT') {
+      console.warn('Failed to read auth store', error);
+    }
+  }
+
+  await fs.promises.mkdir(path.dirname(authStorePath), { recursive: true });
+  await fs.promises.writeFile(authStorePath, JSON.stringify(defaultAuthState, null, 2));
+  return defaultAuthState;
+}
+
+async function writeAuthState(authState) {
+  const sanitizedPassword = typeof authState.adminPassword === 'string' ? authState.adminPassword : defaultAuthState.adminPassword;
+  const sanitizedUsers = Array.isArray(authState.recorderUsers)
+    ? authState.recorderUsers
+        .filter(user => user && typeof user.username === 'string' && typeof user.password === 'string')
+        .map(user => ({
+          id: user.id || crypto.randomUUID(),
+          username: user.username,
+          password: user.password,
+        }))
+    : defaultAuthState.recorderUsers;
+
+  const payload = {
+    adminPassword: sanitizedPassword,
+    recorderUsers: sanitizedUsers,
+  };
+
+  await fs.promises.mkdir(path.dirname(authStorePath), { recursive: true });
+  await fs.promises.writeFile(authStorePath, JSON.stringify(payload, null, 2));
+  return payload;
+}
 
 const upload = multer({ dest: uploadsDir });
 
@@ -127,6 +191,39 @@ app.use(
 );
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.get('/api/auth', async (_req, res) => {
+  try {
+    const state = await readAuthState();
+    res.json(state);
+  } catch (error) {
+    console.error('Failed to read auth state', error);
+    res.status(500).send('Failed to read auth state');
+  }
+});
+
+app.put('/api/auth', async (req, res) => {
+  const { adminPassword, recorderUsers } = req.body || {};
+
+  if (adminPassword && typeof adminPassword !== 'string') {
+    return res.status(400).send('adminPassword must be a string');
+  }
+
+  if (recorderUsers && !Array.isArray(recorderUsers)) {
+    return res.status(400).send('recorderUsers must be an array');
+  }
+
+  try {
+    const nextState = await writeAuthState({
+      adminPassword: adminPassword ?? defaultAuthState.adminPassword,
+      recorderUsers: recorderUsers ?? defaultAuthState.recorderUsers,
+    });
+    res.json(nextState);
+  } catch (error) {
+    console.error('Failed to write auth state', error);
+    res.status(500).send('Failed to write auth state');
+  }
+});
 
 async function enforcePlaybackLimit(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
