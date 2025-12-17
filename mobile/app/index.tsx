@@ -13,14 +13,15 @@ import {
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Mic, Square, Play, Share2, Trash2, Plus } from 'lucide-react-native';
-import {
-  createRemoteSound,
-  deleteRemoteSound,
-  fetchRemoteSounds,
-  fetchAuthState,
-  uploadBase64Recording,
-  RecorderUser,
-} from '../lib/api';
+  import {
+    createRemoteSound,
+    deleteRemoteSound,
+    fetchRemoteSounds,
+    fetchAuthState,
+    sendClientLog,
+    uploadBase64Recording,
+    RecorderUser,
+  } from '../lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Recording {
@@ -222,6 +223,22 @@ export default function HomeScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to upload recording');
       console.error('Error uploading recording:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      try {
+        await sendClientLog({
+          level: 'error',
+          message: 'Failed to upload recording',
+          user: currentUser || undefined,
+          context: {
+            filename: recording.filename,
+            duration: recording.duration,
+            error: errorMessage,
+          },
+        });
+      } catch (logError) {
+        console.error('Failed to send error log', logError);
+      }
     } finally {
       setLoading(false);
     }

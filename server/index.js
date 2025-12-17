@@ -17,6 +17,7 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 const logsDir = path.join(__dirname, '..', 'logs');
 fs.mkdirSync(logsDir, { recursive: true });
 const sessionLogPath = path.join(logsDir, 'session.log');
+const clientLogPath = path.join(logsDir, 'client.log');
 
 const authStorePath = path.join(__dirname, 'auth-store.json');
 const defaultAuthState = {
@@ -191,6 +192,36 @@ app.use(
 );
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.post('/api/client-logs', async (req, res) => {
+  const { message, level = 'info', user, context } = req.body || {};
+
+  if (!message || typeof message !== 'string') {
+    return res.status(400).send('message is required');
+  }
+
+  const ip = getClientIp(req);
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level: typeof level === 'string' ? level.toLowerCase() : 'info',
+    message,
+    user: typeof user === 'string' && user.trim() ? user.trim() : undefined,
+    context: context ?? undefined,
+    meta: {
+      ip,
+      userAgent: req.get('user-agent'),
+      path: req.originalUrl,
+    },
+  };
+
+  try {
+    await fs.promises.appendFile(clientLogPath, `${JSON.stringify(logEntry)}\n`, 'utf8');
+    res.status(201).json({ status: 'logged' });
+  } catch (error) {
+    console.error('Failed to persist client log', error);
+    res.status(500).send('Failed to write client log');
+  }
+});
 
 app.get('/api/auth', async (_req, res) => {
   try {

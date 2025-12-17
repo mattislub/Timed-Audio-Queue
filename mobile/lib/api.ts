@@ -1,5 +1,12 @@
 const API_BASE_URL = 'https://api.sr.70-60.com/api';
 
+type ClientLogPayload = {
+  message: string;
+  level?: 'info' | 'warn' | 'error';
+  user?: string;
+  context?: Record<string, unknown>;
+};
+
 export type RecorderUser = {
   id?: string;
   username: string;
@@ -65,4 +72,14 @@ export async function createRemoteSound(payload: Partial<RemoteSound>): Promise<
 export async function fetchAuthState(): Promise<AuthState> {
   const response = await fetch(`${API_BASE_URL}/auth`);
   return handleResponse<AuthState>(response);
+}
+
+export async function sendClientLog(payload: ClientLogPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/client-logs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  await handleResponse(response);
 }
