@@ -52,6 +52,31 @@ export async function uploadBase64Recording(
   return handleResponse<{ publicUrl: string }>(response);
 }
 
+export async function uploadRecordingMultipart(
+  uri: string,
+  name = 'recording.m4a'
+): Promise<{ publicUrl: string }> {
+  const formData = new FormData();
+
+  formData.append('file', {
+    uri,
+    name,
+    type: 'audio/mp4',
+  } as any);
+
+  const response = await fetch(`${API_BASE_URL}/sounds/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || 'Upload failed');
+  }
+
+  return JSON.parse(text);
+}
+
 export async function createRemoteSound(payload: Partial<RemoteSound>): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/sounds`, {
     method: 'POST',
