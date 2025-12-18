@@ -20,12 +20,26 @@ export type RemoteSound = {
 };
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') ?? '';
+  const text = await response.text();
+
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || 'Unexpected server response');
+    throw new Error(text || 'Unexpected server response');
   }
 
-  return response.json() as Promise<T>;
+  if (!text) {
+    return undefined as T;
+  }
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      // Fall through to return the raw text when JSON parsing fails.
+    }
+  }
+
+  return text as unknown as T;
 }
 
 export async function fetchRemoteSounds(): Promise<RemoteSound[]> {
