@@ -128,15 +128,15 @@ export default function HomeScreen() {
       const newRecording = new Audio.Recording();
       await newRecording.prepareToRecordAsync({
         android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          extension: '.aac',
+          outputFormat: Audio.AndroidOutputFormat.AAC_ADTS,
           audioEncoder: Audio.AndroidAudioEncoder.AAC,
           sampleRate: 44100,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
-          extension: '.m4a',
+          extension: '.aac',
           outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
           audioQuality: Audio.IOSAudioQuality.MAX,
           sampleRate: 44100,
@@ -166,7 +166,7 @@ export default function HomeScreen() {
         return;
       }
 
-      const filename = `recording-${Date.now()}.m4a`;
+      const filename = `recording-${Date.now()}.aac`;
 
       const fileInfo = await FileSystem.getInfoAsync(uri);
       if (!fileInfo.exists) {

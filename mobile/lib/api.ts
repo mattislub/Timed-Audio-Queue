@@ -68,14 +68,14 @@ export async function uploadBase64Recording(
 
 export async function uploadRecordingMultipart(
   uri: string,
-  name = 'recording.m4a'
+  name = 'recording.aac'
 ): Promise<{ publicUrl: string }> {
   const formData = new FormData();
 
   formData.append('file', {
     uri,
     name,
-    type: 'audio/mp4',
+    type: 'audio/aac',
   } as any);
 
   const response = await fetch(`${API_BASE_URL}/sounds/upload`, {
