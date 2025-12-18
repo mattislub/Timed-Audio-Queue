@@ -18,7 +18,7 @@ import {
   deleteRemoteSound,
   fetchRemoteSounds,
   fetchAuthState,
-  uploadBase64Recording,
+  uploadRecordingMultipart,
   RecorderUser,
 } from '../lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -201,15 +201,7 @@ export default function HomeScreen() {
     try {
       setLoading(true);
 
-      const fileContent = await FileSystem.readAsStringAsync(recording.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const { publicUrl } = await uploadBase64Recording(
-        recording.filename,
-        fileContent,
-        recording.duration
-      );
+      const { publicUrl } = await uploadRecordingMultipart(recording.uri, recording.filename);
 
       await createRemoteSound({
         file_name: recording.filename,
