@@ -212,7 +212,6 @@ export default function HomeScreen() {
       Alert.alert('Success', 'Recording uploaded successfully');
       loadRecordings();
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload recording');
       console.error('Error uploading recording:', error);
     } finally {
       setLoading(false);
