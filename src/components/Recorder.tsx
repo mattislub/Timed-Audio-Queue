@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Circle, StopCircle } from 'lucide-react';
+import { AlertCircle, Circle, Mic, StopCircle } from 'lucide-react';
 import type { AppSettings } from '../App';
 
 const NON_WEBM_TYPES = ['audio/mpeg', 'audio/ogg', 'audio/aac', 'audio/wav'];
@@ -326,6 +326,18 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     }
   }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings]);
 
+  const handlePressStart = useCallback(() => {
+    if (isRecording || isUploading) return;
+
+    startRecording();
+  }, [isRecording, isUploading, startRecording]);
+
+  const handlePressEnd = useCallback(() => {
+    if (!isRecording) return;
+
+    stopRecording();
+  }, [isRecording, stopRecording]);
+
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
     if (!recorder) return;
@@ -361,7 +373,22 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
       <div className="flex items-center justify-center gap-4 p-6 bg-slate-800/60 rounded-xl border border-slate-800">
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onPointerDown={handlePressStart}
+          onPointerUp={handlePressEnd}
+          onPointerLeave={handlePressEnd}
+          onPointerCancel={handlePressEnd}
+          onKeyDown={event => {
+            if (event.key === ' ' || event.key === 'Enter') {
+              event.preventDefault();
+              handlePressStart();
+            }
+          }}
+          onKeyUp={event => {
+            if (event.key === ' ' || event.key === 'Enter') {
+              event.preventDefault();
+              handlePressEnd();
+            }
+          }}
           disabled={isUploading}
           className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-semibold transition border disabled:opacity-70 disabled:cursor-not-allowed ${
             isRecording
@@ -381,8 +408,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
             </>
           ) : (
             <>
-              <Circle className="w-6 h-6" />
-              Start recording
+              <Mic className="w-6 h-6" />
+              Hold to record
             </>
           )}
         </button>
