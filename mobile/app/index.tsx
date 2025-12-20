@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,7 @@ export default function HomeScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const stopRequestedRef = useRef(false);
 
   useEffect(() => {
     setupAudio();
@@ -115,13 +116,62 @@ export default function HomeScreen() {
     }
   };
 
+  const stopRecording = async (activeRecording: Audio.Recording | null = recordingObject) => {
+    if (!activeRecording) return;
+
+    try {
+      await activeRecording.stopAndUnloadAsync();
+      const uri = activeRecording.getURI();
+
+      if (!uri) {
+        Alert.alert('Error', 'Failed to save recording');
+        return;
+      }
+
+      const filename = `recording-${Date.now()}.mp3`;
+
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists) {
+        Alert.alert('Error', 'Recording file not found');
+        return;
+      }
+
+      const status = await activeRecording.getStatusAsync();
+
+      const newRecording: Recording = {
+        id: filename,
+        uri,
+        duration: status.isDoneRecording ? (status.durationMillis ?? 0) / 1000 : 0,
+        filename,
+        isPlaying: false,
+      };
+
+      setIsRecording(false);
+      stopRequestedRef.current = false;
+      setRecordingObject(null);
+
+      setRecordings((prev) => [newRecording, ...prev]);
+      await uploadRecording(newRecording);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to stop recording');
+      console.error('Error stopping recording:', error);
+    } finally {
+      stopRequestedRef.current = false;
+    }
+  };
+
   const startRecording = async () => {
     if (!currentUser) {
       Alert.alert('דרושה התחברות', 'התחבר לפני הקלטה חדשה.');
       return;
     }
 
+    if (loading || isRecording) {
+      return;
+    }
+
     try {
+      stopRequestedRef.current = false;
       const newRecording = new Audio.Recording();
       await newRecording.prepareToRecordAsync({
         android: {
@@ -145,50 +195,25 @@ export default function HomeScreen() {
       await newRecording.startAsync();
       setRecordingObject(newRecording);
       setIsRecording(true);
+
+      if (stopRequestedRef.current) {
+        await stopRecording(newRecording);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to start recording');
       console.error('Error starting recording:', error);
     }
   };
 
-  const stopRecording = async () => {
-    if (!recordingObject) return;
+  const handlePressIn = () => {
+    stopRequestedRef.current = false;
+    startRecording();
+  };
 
-    try {
-      await recordingObject.stopAndUnloadAsync();
-      const uri = recordingObject.getURI();
-
-      if (!uri) {
-        Alert.alert('Error', 'Failed to save recording');
-        return;
-      }
-
-      const filename = `recording-${Date.now()}.mp3`;
-
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      if (!fileInfo.exists) {
-        Alert.alert('Error', 'Recording file not found');
-        return;
-      }
-
-      setIsRecording(false);
-      setRecordingObject(null);
-
-      const status = await recordingObject.getStatusAsync();
-
-      const newRecording: Recording = {
-        id: filename,
-        uri,
-        duration: status.isDoneRecording ? (status.durationMillis ?? 0) / 1000 : 0,
-        filename,
-        isPlaying: false,
-      };
-
-      setRecordings([newRecording, ...recordings]);
-      await uploadRecording(newRecording);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to stop recording');
-      console.error('Error stopping recording:', error);
+  const handlePressOut = () => {
+    stopRequestedRef.current = true;
+    if (recordingObject) {
+      stopRecording();
     }
   };
 
@@ -319,18 +344,19 @@ export default function HomeScreen() {
         <View style={styles.recordingSection}>
           <TouchableOpacity
             style={[styles.recordButton, isRecording && styles.recordingActive]}
-            onPress={isRecording ? stopRecording : startRecording}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
             disabled={loading}
           >
             {isRecording ? (
               <>
                 <Square size={24} color="white" />
-                <Text style={styles.recordButtonText}>Stop Recording</Text>
+                <Text style={styles.recordButtonText}>שחרר כדי לשמור</Text>
               </>
             ) : (
               <>
                 <Mic size={24} color="white" />
-                <Text style={styles.recordButtonText}>Start Recording</Text>
+                <Text style={styles.recordButtonText}>החזק להקלטה</Text>
               </>
             )}
           </TouchableOpacity>
