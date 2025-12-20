@@ -326,6 +326,15 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     }
   }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings]);
 
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    recorder.stop();
+    recorder.stream.getTracks().forEach(track => track.stop());
+    setIsRecording(false);
+  }, []);
+
   const handlePressStart = useCallback(() => {
     if (isRecording || isUploading) return;
 
@@ -337,15 +346,6 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
     stopRecording();
   }, [isRecording, stopRecording]);
-
-  const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder) return;
-
-    recorder.stop();
-    recorder.stream.getTracks().forEach(track => track.stop());
-    setIsRecording(false);
-  }, []);
 
   useEffect(() => {
     return () => {
