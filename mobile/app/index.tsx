@@ -12,10 +12,9 @@ import {
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { Mic, Square, Play, Share2, Trash2, Plus } from 'lucide-react-native';
+import { Mic, Square } from 'lucide-react-native';
 import {
   createRemoteSound,
-  deleteRemoteSound,
   fetchRemoteSounds,
   fetchAuthState,
   uploadRecordingMultipart,
@@ -37,9 +36,7 @@ export default function HomeScreen() {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingObject, setRecordingObject] = useState<Audio.Recording | null>(null);
-  const [soundObject, setSoundObject] = useState<Audio.Sound | null>(null);
   const [loading, setLoading] = useState(false);
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>([]);
@@ -209,49 +206,11 @@ export default function HomeScreen() {
         duration: recording.duration,
       });
 
-      Alert.alert('Success', 'Recording uploaded successfully');
       loadRecordings();
     } catch (error) {
       console.error('Error uploading recording:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const playRecording = async (recording: Recording) => {
-    try {
-      if (soundObject) {
-        await soundObject.unloadAsync();
-      }
-
-      const { sound } = await Audio.Sound.createAsync({
-        uri: recording.uri,
-      });
-
-      setSoundObject(sound);
-      setPlayingId(recording.id);
-      await sound.playAsync();
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingId(null);
-        }
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to play recording');
-      console.error('Error playing recording:', error);
-    }
-  };
-
-  const deleteRecording = async (recording: Recording) => {
-    try {
-      await FileSystem.deleteAsync(recording.uri);
-      setRecordings(recordings.filter((r) => r.id !== recording.id));
-
-      await deleteRemoteSound(recording.id);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to delete recording');
-      console.error('Error deleting recording:', error);
     }
   };
 
@@ -375,58 +334,6 @@ export default function HomeScreen() {
               </>
             )}
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.listSection}>
-          <Text style={styles.listTitle}>Your Recordings</Text>
-
-          {recordings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Plus size={48} color="#d1d5db" />
-              <Text style={styles.emptyStateText}>No recordings yet</Text>
-              <Text style={styles.emptyStateSubtext}>Start recording to create your first audio</Text>
-            </View>
-          ) : (
-            recordings.map((recording) => (
-              <View key={recording.id} style={styles.recordingItem}>
-                <View style={styles.recordingInfo}>
-                  <Text style={styles.recordingName}>{recording.filename}</Text>
-                  <Text style={styles.recordingDuration}>
-                    {Math.round(recording.duration)}s
-                  </Text>
-                </View>
-
-                <View style={styles.recordingActions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      playingId === recording.id && styles.actionButtonActive,
-                    ]}
-                    onPress={() => playRecording(recording)}
-                    disabled={loading}
-                  >
-                    <Play size={20} color={playingId === recording.id ? '#3b82f6' : '#6b7280'} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => uploadRecording(recording)}
-                    disabled={loading}
-                  >
-                    <Share2 size={20} color="#6b7280" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => deleteRecording(recording)}
-                    disabled={loading}
-                  >
-                    <Trash2 size={20} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
         </View>
       </ScrollView>
 
@@ -561,66 +468,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
-  },
-  listSection: {
-    marginBottom: 32,
-  },
-  listTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    gap: 12,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-  recordingItem: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-  },
-  recordingInfo: {
-    flex: 1,
-  },
-  recordingName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  recordingDuration: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  recordingActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 6,
-    backgroundColor: '#f3f4f6',
-  },
-  actionButtonActive: {
-    backgroundColor: '#dbeafe',
   },
   loadingText: {
     color: '#1f2937',
