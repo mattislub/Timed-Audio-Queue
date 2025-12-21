@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Circle, Mic, StopCircle } from 'lucide-react';
+import { AlertCircle, Mic, StopCircle } from 'lucide-react';
 import type { AppSettings } from '../App';
 
 const NON_WEBM_TYPES = ['audio/mpeg', 'audio/ogg', 'audio/aac', 'audio/wav'];
@@ -223,11 +223,72 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
   const [selectedMimeType, setSelectedMimeType] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
+  const [waveformValues, setWaveformValues] = useState<number[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const visualizerFrameRef = useRef<number | null>(null);
 
   const preferredMimeType = useMemo(() => {
     const available = NON_WEBM_TYPES.find(type => MediaRecorder.isTypeSupported(type));
     return available ?? 'audio/webm';
   }, []);
+
+  const stopVisualizer = useCallback(() => {
+    if (visualizerFrameRef.current) {
+      cancelAnimationFrame(visualizerFrameRef.current);
+      visualizerFrameRef.current = null;
+    }
+
+    analyserRef.current?.disconnect();
+    sourceNodeRef.current?.disconnect();
+
+    audioContextRef.current?.close().catch(() => undefined);
+    analyserRef.current = null;
+    sourceNodeRef.current = null;
+    audioContextRef.current = null;
+    dataArrayRef.current = null;
+  }, []);
+
+  const startVisualizer = useCallback(
+    (stream: MediaStream) => {
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        source.connect(analyser);
+
+        audioContextRef.current = audioContext;
+        analyserRef.current = analyser;
+        sourceNodeRef.current = source;
+        dataArrayRef.current = dataArray;
+
+        const render = () => {
+          if (!analyserRef.current || !dataArrayRef.current) return;
+
+          analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
+          let sum = 0;
+          for (let i = 0; i < dataArrayRef.current.length; i += 1) {
+            const value = dataArrayRef.current[i] / 128 - 1;
+            sum += Math.abs(value);
+          }
+
+          const amplitude = Math.min(sum / dataArrayRef.current.length, 1);
+          setWaveformValues(prev => [...prev.slice(-48), amplitude]);
+          visualizerFrameRef.current = requestAnimationFrame(render);
+        };
+
+        render();
+      } catch (visualizerError) {
+        console.warn('Visualizer unavailable', visualizerError);
+      }
+    },
+    []
+  );
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -242,10 +303,13 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setWaveformValues([]);
       const recorder = new MediaRecorder(stream, { mimeType: preferredMimeType });
       mediaRecorderRef.current = recorder;
       setSelectedMimeType(preferredMimeType);
       chunksRef.current = [];
+
+      startVisualizer(stream);
 
       recorder.ondataavailable = event => {
         if (event.data && event.data.size > 0) {
@@ -324,7 +388,7 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         message: 'Check microphone permissions and try again. We will convert automatically if WebM is recorded.',
       });
     }
-  }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings]);
+  }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings, startVisualizer]);
 
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -333,7 +397,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     recorder.stop();
     recorder.stream.getTracks().forEach(track => track.stop());
     setIsRecording(false);
-  }, []);
+    stopVisualizer();
+  }, [stopVisualizer]);
 
   const handlePressStart = useCallback(() => {
     if (isRecording || isUploading) return;
@@ -351,8 +416,9 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
     return () => {
       stopRecording();
       chunksRef.current = [];
+      stopVisualizer();
     };
-  }, [stopRecording]);
+  }, [stopRecording, stopVisualizer]);
 
   const supportedMessage = preferredMimeType
     ? `Recordings will be saved as ${preferredMimeType.replace('audio/', '').toUpperCase()}. WebM files will be converted automatically.`
@@ -371,56 +437,72 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 p-6 bg-slate-800/60 rounded-xl border border-slate-800">
-        <button
-          onPointerDown={handlePressStart}
-          onPointerUp={handlePressEnd}
-          onPointerLeave={handlePressEnd}
-          onPointerCancel={handlePressEnd}
-          onKeyDown={event => {
-            if (event.key === ' ' || event.key === 'Enter') {
-              event.preventDefault();
-              handlePressStart();
-            }
-          }}
-          onKeyUp={event => {
-            if (event.key === ' ' || event.key === 'Enter') {
-              event.preventDefault();
-              handlePressEnd();
-            }
-          }}
-          disabled={isUploading}
-          className={`flex items-center gap-3 px-6 py-3 rounded-xl text-lg font-semibold transition border disabled:opacity-70 disabled:cursor-not-allowed ${
-            isRecording
-              ? 'bg-rose-600/90 border-rose-500 hover:bg-rose-600'
-              : 'bg-emerald-600/90 border-emerald-500 hover:bg-emerald-600'
-          }`}
-        >
-          {isRecording ? (
-            <>
-              <StopCircle className="w-6 h-6" />
-              Stop & save
-            </>
-          ) : isUploading ? (
-            <>
-              <Circle className="w-6 h-6 animate-pulse" />
-              Uploading recording to server...
-            </>
-          ) : (
-            <>
-              <Mic className="w-6 h-6" />
-              Hold to record
-            </>
-          )}
-        </button>
-        <div className="text-sm text-slate-300">
-          {isRecording
-            ? 'Recording now...'
-            : isUploading
-              ? 'Sending the file to the server, please wait for the upload to finish.'
-              : isConverting
-                ? 'Converting the file to a supported format...'
-                : 'Ready for a new recording'}
+      <div className="flex flex-col items-center justify-center gap-6 p-6 bg-slate-800/60 rounded-xl border border-slate-800">
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onPointerDown={handlePressStart}
+            onPointerUp={handlePressEnd}
+            onPointerLeave={handlePressEnd}
+            onPointerCancel={handlePressEnd}
+            onKeyDown={event => {
+              if (event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                handlePressStart();
+              }
+            }}
+            onKeyUp={event => {
+              if (event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                handlePressEnd();
+              }
+            }}
+            disabled={isUploading}
+            aria-pressed={isRecording}
+            className={`relative w-32 h-32 rounded-full flex items-center justify-center text-white transition disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20 border-2 ${
+              isRecording
+                ? 'bg-rose-600/95 border-rose-400 ring-4 ring-rose-500/30'
+                : 'bg-emerald-600/95 border-emerald-300 hover:bg-emerald-500'
+            }`}
+          >
+            <div
+              className={`absolute inset-2 rounded-full flex items-center justify-center transition ${
+                isRecording ? 'bg-rose-700/70' : 'bg-emerald-700/50'
+              }`}
+            >
+              {isRecording ? <StopCircle className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
+            </div>
+          </button>
+          <div className="text-sm text-slate-200 font-semibold">
+            {isRecording
+              ? 'Recording... release to save'
+              : isUploading
+                ? 'Uploading recording to server...'
+                : isConverting
+                  ? 'Converting the file to a supported format...'
+                  : 'Hold to record a new clip'}
+          </div>
+        </div>
+
+        <div className="w-full space-y-2">
+          <div className="flex items-center justify-between text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">תצוגה מקדימה</p>
+            <p>{waveformValues.length ? 'מה שהוקלט עד עכשיו' : 'הקלט ותראה את הגל'}</p>
+          </div>
+          <div className="h-20 w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex items-center">
+            {waveformValues.length ? (
+              <div className="flex items-end gap-1 w-full h-full">
+                {waveformValues.map((value, index) => (
+                  <div
+                    key={`${index}-${value}`}
+                    className="flex-1 rounded-full bg-emerald-400/80"
+                    style={{ height: `${Math.max(8, value * 100)}%` }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm">הגל של ההקלטה יופיע כאן בזמן הקלטה.</div>
+            )}
+          </div>
         </div>
       </div>
 
