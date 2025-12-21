@@ -52,7 +52,9 @@ export default function HomeScreen() {
   const [password, setPassword] = useState('');
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [localRecordings, setLocalRecordings] = useState<LocalRecording[]>([]);
+  const [waveformSamples, setWaveformSamples] = useState<number[]>([]);
   const stopRequestedRef = useRef(false);
+  const waveformTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setupAudio();
@@ -156,6 +158,7 @@ export default function HomeScreen() {
       };
 
       setIsRecording(false);
+      stopWaveform();
       stopRequestedRef.current = false;
       setRecordingObject(null);
 
@@ -172,6 +175,33 @@ export default function HomeScreen() {
       stopRequestedRef.current = false;
     }
   };
+
+  const startWaveform = () => {
+    if (waveformTimerRef.current) {
+      clearInterval(waveformTimerRef.current);
+    }
+
+    waveformTimerRef.current = setInterval(() => {
+      setWaveformSamples((prev) => {
+        const lastValue = prev[prev.length - 1] ?? 0.5;
+        const nextValue = Math.min(1, Math.max(0, lastValue + (Math.random() - 0.5) * 0.4));
+        return [...prev.slice(-48), nextValue];
+      });
+    }, 140);
+  };
+
+  const stopWaveform = () => {
+    if (waveformTimerRef.current) {
+      clearInterval(waveformTimerRef.current);
+      waveformTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopWaveform();
+    };
+  }, []);
 
   const startRecording = async () => {
     if (!currentUser) {
@@ -208,6 +238,8 @@ export default function HomeScreen() {
       await newRecording.startAsync();
       setRecordingObject(newRecording);
       setIsRecording(true);
+      setWaveformSamples([]);
+      startWaveform();
 
       if (stopRequestedRef.current) {
         await stopRecording(newRecording);
@@ -365,24 +397,40 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
         <View style={styles.recordingSection}>
-          <TouchableOpacity
-            style={[styles.recordButton, isRecording && styles.recordingActive]}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            disabled={loading}
-          >
-            {isRecording ? (
-              <>
-                <Square size={24} color="white" />
-                <Text style={styles.recordButtonText}>שחרר כדי לשמור</Text>
-              </>
-            ) : (
-              <>
-                <Mic size={24} color="white" />
-                <Text style={styles.recordButtonText}>החזק להקלטה</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.recordButtonWrapper}>
+            <TouchableOpacity
+              style={[styles.recordCircle, isRecording ? styles.recordingActiveCircle : styles.recordIdleCircle]}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              disabled={loading}
+            >
+              <View style={[styles.recordCircleInner, isRecording && styles.recordCircleInnerActive]}>
+                {isRecording ? <Square size={32} color="white" /> : <Mic size={32} color="white" />}
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.recordHint}>{isRecording ? 'שחרר כדי לשמור' : 'החזק כדי להתחיל להקליט'}</Text>
+          </View>
+
+          <View style={styles.waveformCard}>
+            <View style={styles.waveformHeader}>
+              <Text style={styles.sectionTitle}>תצוגה מקדימה</Text>
+              <Text style={styles.waveformSubtitle}>
+                {waveformSamples.length ? 'גל הקול של ההקלטה הנוכחית' : 'תראה כאן גרף בזמן הקלטה'}
+              </Text>
+            </View>
+            <View style={styles.waveformBars}>
+              {waveformSamples.length ? (
+                waveformSamples.map((value, index) => (
+                  <View
+                    key={`${index}-${value}`}
+                    style={[styles.waveformBar, { height: `${Math.max(15, value * 100)}%` }]}
+                  />
+                ))
+              ) : (
+                <Text style={styles.waveformPlaceholder}>הגרף יופיע בזמן הקלטה, כמו וואטסאפ.</Text>
+              )}
+            </View>
+          </View>
         </View>
 
         <View style={styles.listSection}>
@@ -525,6 +573,7 @@ const styles = StyleSheet.create({
   },
   recordingSection: {
     marginBottom: 32,
+    gap: 16,
   },
   listSection: {
     gap: 12,
@@ -576,29 +625,88 @@ const styles = StyleSheet.create({
   statusUploading: {
     backgroundColor: '#facc15',
   },
-  recordButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  recordButtonWrapper: {
     alignItems: 'center',
-    gap: 12,
-    shadowColor: '#3b82f6',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 8,
+    gap: 10,
   },
-  recordingActive: {
+  recordCircle: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10b981',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 3,
+  },
+  recordIdleCircle: {
+    backgroundColor: '#10b981',
+    borderColor: '#a7f3d0',
+  },
+  recordingActiveCircle: {
     backgroundColor: '#ef4444',
+    borderColor: '#fecdd3',
     shadowColor: '#ef4444',
   },
-  recordButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
+  recordCircleInner: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#bbf7d0',
+  },
+  recordCircleInnerActive: {
+    backgroundColor: '#b91c1c',
+    borderColor: '#fecdd3',
+  },
+  recordHint: {
+    color: '#111827',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  waveformCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    gap: 10,
+  },
+  waveformHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  waveformSubtitle: {
+    color: '#6b7280',
+    fontSize: 12,
+  },
+  waveformBars: {
+    height: 80,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  waveformBar: {
+    flex: 1,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+    minHeight: 10,
+  },
+  waveformPlaceholder: {
+    color: '#6b7280',
+    fontSize: 13,
   },
   loadingText: {
     color: '#1f2937',
