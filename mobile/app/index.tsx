@@ -205,7 +205,7 @@ export default function HomeScreen() {
 
   const startRecording = async () => {
     if (!currentUser) {
-      Alert.alert('דרושה התחברות', 'התחבר לפני הקלטה חדשה.');
+      Alert.alert('Login required', 'Please sign in before starting a new recording.');
       return;
     }
 
@@ -296,7 +296,7 @@ export default function HomeScreen() {
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      Alert.alert('שגיאה', 'נא להזין שם משתמש וסיסמה');
+      Alert.alert('Error', 'Please enter a username and password');
       return;
     }
 
@@ -307,7 +307,7 @@ export default function HomeScreen() {
     );
 
     if (!match) {
-      Alert.alert('התחברות נכשלה', 'שם המשתמש או הסיסמה אינם נכונים.');
+      Alert.alert('Login failed', 'The username or password is incorrect.');
       return;
     }
 
@@ -330,7 +330,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.container}>
         <View style={[styles.content, styles.centered]}>
           <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>טוען נתוני התחברות...</Text>
+          <Text style={styles.loadingText}>Loading login data...</Text>
         </View>
       </SafeAreaView>
     );
@@ -345,23 +345,23 @@ export default function HomeScreen() {
               <Mic size={22} color="#2563eb" />
               <Text style={styles.title}>Audio Queue</Text>
             </View>
-            <Text style={styles.authSubtitle}>התחבר כדי להעלות הקלטות ישירות לשרת</Text>
+            <Text style={styles.authSubtitle}>Sign in to upload recordings directly to the server</Text>
 
             {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
             {recorderUsers.length === 0 ? (
-              <Text style={styles.errorText}>אין משתמשי מקליטים זמינים בשרת.</Text>
+              <Text style={styles.errorText}>No recorder users are available on the server.</Text>
             ) : null}
 
             <TextInput
               style={styles.input}
-              placeholder="שם משתמש"
+              placeholder="Username"
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
             />
             <TextInput
               style={styles.input}
-              placeholder="סיסמה"
+              placeholder="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -372,7 +372,7 @@ export default function HomeScreen() {
               onPress={handleLogin}
               disabled={!username || !password || recorderUsers.length === 0}
             >
-              <Text style={styles.loginButtonText}>התחבר</Text>
+              <Text style={styles.loginButtonText}>Sign in</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -390,7 +390,7 @@ export default function HomeScreen() {
         <View style={styles.userBadge}>
           <Text style={styles.userText}>{currentUser}</Text>
           <TouchableOpacity onPress={handleLogout}>
-            <Text style={styles.logoutText}>התנתק</Text>
+            <Text style={styles.logoutText}>Sign out</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -408,14 +408,14 @@ export default function HomeScreen() {
                 {isRecording ? <Square size={32} color="white" /> : <Mic size={32} color="white" />}
               </View>
             </TouchableOpacity>
-            <Text style={styles.recordHint}>{isRecording ? 'שחרר כדי לשמור' : 'החזק כדי להתחיל להקליט'}</Text>
+            <Text style={styles.recordHint}>{isRecording ? 'Release to save' : 'Hold to start recording'}</Text>
           </View>
 
           <View style={styles.waveformCard}>
             <View style={styles.waveformHeader}>
-              <Text style={styles.sectionTitle}>תצוגה מקדימה</Text>
+              <Text style={styles.sectionTitle}>Preview</Text>
               <Text style={styles.waveformSubtitle}>
-                {waveformSamples.length ? 'גל הקול של ההקלטה הנוכחית' : 'תראה כאן גרף בזמן הקלטה'}
+                {waveformSamples.length ? 'The waveform of the current recording' : "You'll see the chart here while recording"}
               </Text>
             </View>
             <View style={styles.waveformBars}>
@@ -427,16 +427,16 @@ export default function HomeScreen() {
                   />
                 ))
               ) : (
-                <Text style={styles.waveformPlaceholder}>הגרף יופיע בזמן הקלטה, כמו וואטסאפ.</Text>
+                <Text style={styles.waveformPlaceholder}>The graph will appear while recording, just like WhatsApp.</Text>
               )}
             </View>
           </View>
         </View>
 
         <View style={styles.listSection}>
-          <Text style={styles.sectionTitle}>הקלטות אחרונות במכשיר</Text>
+          <Text style={styles.sectionTitle}>Recent device recordings</Text>
           {localRecordings.length === 0 ? (
-            <Text style={styles.emptyText}>עוד לא בוצעו הקלטות מהמכשיר.</Text>
+            <Text style={styles.emptyText}>No recordings have been made from this device yet.</Text>
           ) : (
             localRecordings.map((recording) => (
               <View key={recording.id} style={styles.recordingRow}>
@@ -444,10 +444,10 @@ export default function HomeScreen() {
                   <Text style={styles.recordingName}>{recording.filename}</Text>
                   <Text style={styles.recordingStatus}>
                     {recording.status === 'success'
-                      ? 'נשלח בהצלחה'
+                      ? 'Sent successfully'
                       : recording.status === 'failed'
-                      ? 'ההעלאה נכשלה'
-                      : 'מעלה לשרת...'}
+                      ? 'Upload failed'
+                      : 'Uploading to server...'}
                   </Text>
                 </View>
                 <View

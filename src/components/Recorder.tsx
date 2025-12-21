@@ -485,8 +485,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
 
         <div className="w-full space-y-2">
           <div className="flex items-center justify-between text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">תצוגה מקדימה</p>
-            <p>{waveformValues.length ? 'מה שהוקלט עד עכשיו' : 'הקלט ותראה את הגל'}</p>
+            <p className="font-semibold text-slate-100">Preview</p>
+            <p>{waveformValues.length ? "What's been recorded so far" : "Record and you'll see the waveform"}</p>
           </div>
           <div className="h-20 w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 flex items-center">
             {waveformValues.length ? (
@@ -500,7 +500,7 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
                 ))}
               </div>
             ) : (
-              <div className="text-slate-500 text-sm">הגל של ההקלטה יופיע כאן בזמן הקלטה.</div>
+              <div className="text-slate-500 text-sm">The recording waveform will appear here while recording.</div>
             )}
           </div>
         </div>
