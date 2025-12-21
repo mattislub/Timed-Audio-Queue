@@ -30,6 +30,14 @@ interface Recording {
   isPlaying: boolean;
 }
 
+type UploadStatus = 'uploading' | 'success' | 'failed';
+
+interface LocalRecording {
+  id: string;
+  filename: string;
+  status: UploadStatus;
+}
+
 const STORAGE_KEY = 'audio-queue/session';
 
 export default function HomeScreen() {
@@ -43,6 +51,7 @@ export default function HomeScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [localRecordings, setLocalRecordings] = useState<LocalRecording[]>([]);
   const stopRequestedRef = useRef(false);
 
   useEffect(() => {
@@ -151,6 +160,10 @@ export default function HomeScreen() {
       setRecordingObject(null);
 
       setRecordings((prev) => [newRecording, ...prev]);
+      setLocalRecordings((prev) => [
+        { id: filename, filename, status: 'uploading' },
+        ...prev,
+      ].slice(0, 5));
       await uploadRecording(newRecording);
     } catch (error) {
       Alert.alert('Error', 'Failed to stop recording');
@@ -231,9 +244,19 @@ export default function HomeScreen() {
         duration: recording.duration,
       });
 
+      setLocalRecordings((prev) =>
+        prev.map((local) =>
+          local.id === recording.id ? { ...local, status: 'success' } : local
+        )
+      );
       loadRecordings();
     } catch (error) {
       console.error('Error uploading recording:', error);
+      setLocalRecordings((prev) =>
+        prev.map((local) =>
+          local.id === recording.id ? { ...local, status: 'failed' } : local
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -361,6 +384,38 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        <View style={styles.listSection}>
+          <Text style={styles.sectionTitle}>הקלטות אחרונות במכשיר</Text>
+          {localRecordings.length === 0 ? (
+            <Text style={styles.emptyText}>עוד לא בוצעו הקלטות מהמכשיר.</Text>
+          ) : (
+            localRecordings.map((recording) => (
+              <View key={recording.id} style={styles.recordingRow}>
+                <View>
+                  <Text style={styles.recordingName}>{recording.filename}</Text>
+                  <Text style={styles.recordingStatus}>
+                    {recording.status === 'success'
+                      ? 'נשלח בהצלחה'
+                      : recording.status === 'failed'
+                      ? 'ההעלאה נכשלה'
+                      : 'מעלה לשרת...'}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.statusDot,
+                    recording.status === 'success'
+                      ? styles.statusSuccess
+                      : recording.status === 'failed'
+                      ? styles.statusFailed
+                      : styles.statusUploading,
+                  ]}
+                />
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
 
       {loading && (
@@ -470,6 +525,56 @@ const styles = StyleSheet.create({
   },
   recordingSection: {
     marginBottom: 32,
+  },
+  listSection: {
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  emptyText: {
+    color: '#6b7280',
+  },
+  recordingRow: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  recordingName: {
+    fontWeight: '700',
+    color: '#111827',
+  },
+  recordingStatus: {
+    color: '#4b5563',
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  statusSuccess: {
+    backgroundColor: '#22c55e',
+    shadowColor: '#22c55e',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  statusFailed: {
+    backgroundColor: '#ef4444',
+  },
+  statusUploading: {
+    backgroundColor: '#facc15',
   },
   recordButton: {
     backgroundColor: '#3b82f6',
