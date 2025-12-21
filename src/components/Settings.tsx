@@ -44,12 +44,12 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
   const handleAdminPasswordSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!newAdminPassword || !confirmAdminPassword) {
-      setAdminPasswordMessage('נא להזין סיסמה ולאשר אותה.');
+      setAdminPasswordMessage('Please enter a password and confirm it.');
       return;
     }
 
     if (newAdminPassword !== confirmAdminPassword) {
-      setAdminPasswordMessage('הסיסמאות אינן תואמות.');
+      setAdminPasswordMessage('The passwords do not match.');
       return;
     }
 
@@ -58,11 +58,11 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     setAuthSaving(false);
 
     if (!ok) {
-      setAdminPasswordMessage('שמירת הסיסמה נכשלה.');
+      setAdminPasswordMessage('Failed to save the password.');
       return;
     }
 
-    setAdminPasswordMessage('הסיסמה עודכנה בהצלחה.');
+    setAdminPasswordMessage('Password updated successfully.');
     setNewAdminPassword('');
     setConfirmAdminPassword('');
   };
@@ -70,7 +70,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
   const handleAddRecorderUser = async (event: FormEvent) => {
     event.preventDefault();
     if (!recorderUsername || !recorderPassword) {
-      setRecorderMessage('יש להזין שם משתמש וסיסמה.');
+      setRecorderMessage('Please enter a username and password.');
       return;
     }
 
@@ -79,7 +79,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     );
 
     if (usernameExists) {
-      setRecorderMessage('שם המשתמש כבר קיים.');
+      setRecorderMessage('That username already exists.');
       return;
     }
 
@@ -94,13 +94,13 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     setAuthSaving(false);
 
     if (!ok) {
-      setRecorderMessage('שמירת המשתמש נכשלה.');
+      setRecorderMessage('Failed to save the user.');
       return;
     }
 
     setRecorderUsername('');
     setRecorderPassword('');
-    setRecorderMessage('משתמש נוצר בהצלחה.');
+    setRecorderMessage('User created successfully.');
   };
 
   const handleRemoveUser = async (id: string) => {
@@ -111,7 +111,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     setAuthSaving(false);
 
     if (!ok) {
-      setRecorderMessage('מחיקת המשתמש נכשלה.');
+      setRecorderMessage('Failed to delete the user.');
     }
   };
 
@@ -143,7 +143,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 : 'text-slate-300 hover:text-white'
             }`}
           >
-            תזמונים
+            Scheduling
           </button>
           <button
             type="button"
@@ -154,7 +154,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 : 'text-slate-300 hover:text-white'
             }`}
           >
-            התחברות
+            Authentication
           </button>
         </div>
       </div>
@@ -269,14 +269,14 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
           <form onSubmit={handleAdminPasswordSubmit} className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4">
             <div>
               <p className="text-sm text-emerald-200">Admin login</p>
-              <h3 className="text-lg font-semibold">הגדרת סיסמה למנהל</h3>
-              <p className="text-sm text-slate-400">הסיסמה מגבילה גישה להגדרות ולתורים.</p>
-              <p className="text-xs text-slate-500 mt-1">Current password: <span className="text-emerald-200">{adminPassword || 'לא הוגדר'}</span></p>
+              <h3 className="text-lg font-semibold">Set admin password</h3>
+              <p className="text-sm text-slate-400">The password restricts access to settings and queues.</p>
+              <p className="text-xs text-slate-500 mt-1">Current password: <span className="text-emerald-200">{adminPassword || 'Not set'}</span></p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
               <label className="space-y-2 text-sm text-slate-200">
-                <span>סיסמה חדשה</span>
+                <span>New password</span>
                 <input
                   type="password"
                   value={newAdminPassword}
@@ -286,7 +286,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 />
               </label>
               <label className="space-y-2 text-sm text-slate-200">
-                <span>אישור סיסמה</span>
+                <span>Confirm password</span>
                 <input
                   type="password"
                   value={confirmAdminPassword}
@@ -304,21 +304,21 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 disabled={authSaving}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold disabled:opacity-60"
               >
-                שמירת סיסמה
+                Save password
               </button>
             </div>
           </form>
 
           <form onSubmit={handleAddRecorderUser} className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4">
             <div>
-              <p className="text-sm text-emerald-200">משתמשי הקלטה בלבד</p>
-              <h3 className="text-lg font-semibold">יצירת משתמש לדף ההקלטה</h3>
-              <p className="text-sm text-slate-400">משתמשים אלו יכנסו לדף נפרד עם גישה להקלטה בלבד.</p>
+              <p className="text-sm text-emerald-200">Recorder-only users</p>
+              <h3 className="text-lg font-semibold">Create a user for the recording page</h3>
+              <p className="text-sm text-slate-400">These users log into a separate page with recording-only access.</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-4">
               <label className="space-y-2 text-sm text-slate-200">
-                <span>שם משתמש</span>
+                <span>Username</span>
                 <input
                   type="text"
                   value={recorderUsername}
@@ -328,7 +328,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 />
               </label>
               <label className="space-y-2 text-sm text-slate-200">
-                <span>סיסמה</span>
+                <span>Password</span>
                 <input
                   type="text"
                   value={recorderPassword}
@@ -344,7 +344,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                   disabled={authSaving}
                   className="w-full px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 disabled:opacity-60"
                 >
-                  הפקת סיסמה אקראית
+                  Generate random password
                 </button>
               </div>
             </div>
@@ -357,7 +357,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 disabled={authSaving}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white font-semibold disabled:opacity-60"
               >
-                יצירת משתמש
+                Create user
               </button>
             </div>
           </form>
@@ -365,14 +365,14 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-emerald-200">רשימת משתמשים</p>
-                <h3 className="text-lg font-semibold">ניהול חשבונות הקלטה</h3>
+                <p className="text-sm text-emerald-200">User list</p>
+                <h3 className="text-lg font-semibold">Manage recording accounts</h3>
               </div>
-              <p className="text-xs text-slate-500">מספר חשבונות: {recorderUsers.length}</p>
+              <p className="text-xs text-slate-500">Number of accounts: {recorderUsers.length}</p>
             </div>
 
             {recorderUsers.length === 0 ? (
-              <p className="text-sm text-slate-400">לא נוצרו משתמשים עדיין.</p>
+              <p className="text-sm text-slate-400">No users have been created yet.</p>
             ) : (
               <div className="space-y-2">
                 {recorderUsers.map(user => (
@@ -382,7 +382,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                   >
                     <div>
                       <p className="text-sm font-semibold text-emerald-200">{user.username}</p>
-                      <p className="text-xs text-slate-400">סיסמה: {user.password}</p>
+                      <p className="text-xs text-slate-400">Password: {user.password}</p>
                     </div>
                     <button
                       type="button"
@@ -390,7 +390,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                       disabled={authSaving}
                       className="text-sm text-rose-300 hover:text-rose-200 disabled:opacity-60"
                     >
-                      מחיקה
+                      Delete
                     </button>
                   </div>
                 ))}

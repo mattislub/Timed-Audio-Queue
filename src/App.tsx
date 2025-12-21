@@ -482,8 +482,8 @@ function App() {
       <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center px-6 py-12">
         <div className="text-center space-y-3">
           <div className="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/30 animate-pulse" />
-          <p className="text-lg font-semibold text-emerald-100">טוען נתוני משתמשים...</p>
-          <p className="text-sm text-slate-400">אנא המתן בזמן שהשרת מחזיר את הגדרות הכניסה.</p>
+          <p className="text-lg font-semibold text-emerald-100">Loading user data...</p>
+          <p className="text-sm text-slate-400">Please wait while the server returns the login settings.</p>
         </div>
       </div>
     );
