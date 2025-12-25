@@ -30,10 +30,15 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     const sanitizedRepeats: RepeatSetting[] = repeatSettings.slice(0, 6).map(repeat => ({
       gapSeconds: Math.max(0, Math.round(repeat.gapSeconds)),
       playbackRate: Math.min(3, Math.max(0.5, Number(repeat.playbackRate.toFixed(2)))),
+      enabled: repeat.enabled !== false,
     }));
 
     while (sanitizedRepeats.length < 6) {
-      sanitizedRepeats.push({ gapSeconds: 30, playbackRate: 1 });
+      sanitizedRepeats.push({ gapSeconds: 30, playbackRate: 1, enabled: true });
+    }
+
+    if (!sanitizedRepeats.some(repeat => repeat.enabled !== false)) {
+      sanitizedRepeats[0].enabled = true;
     }
 
     onChange({ repeatSettings: sanitizedRepeats });
@@ -115,10 +120,16 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
     }
   };
 
-  const nextPlayTimes = useMemo(() => {
-    const times: number[] = [];
+  const nextPlayTimes = useMemo<(number | null)[]>(() => {
+    const times: Array<number | null> = [];
     let total = 0;
     repeatSettings.forEach((repeat, index) => {
+      const isEnabled = repeat.enabled !== false;
+      if (!isEnabled) {
+        times[index] = null;
+        return;
+      }
+
       total += Math.max(0, repeat.gapSeconds);
       times[index] = total;
     });
@@ -169,6 +180,9 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                     Play
                   </th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    Enabled
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
                     Gap (seconds)
                   </th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">
@@ -180,76 +194,126 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {repeatSettings.map((repeat, index) => (
-                  <tr key={index} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-4 align-top">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-base font-semibold text-emerald-200">Play {index + 1}</span>
-                        <span className="text-xs text-slate-500">Time until this play</span>
-                        <span className="text-xs text-slate-400">T+{nextPlayTimes[index]}s</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <label className="flex flex-col gap-2">
-                        <span className="text-xs text-slate-400">Gap in seconds until play {index + 1}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={repeat.gapSeconds}
-                          onChange={event => {
-                            const next = [...repeatSettings];
-                            next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
-                            setRepeatSettings(next);
-                          }}
-                          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
-                        />
-                      </label>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <label className="flex flex-col gap-3">
-                        <span className="text-xs text-slate-400">Select speed</span>
-                        <input
-                          type="range"
-                          min={0.5}
-                          max={3}
-                          step={0.1}
-                          value={repeat.playbackRate}
-                          onChange={event => {
-                            const next = [...repeatSettings];
-                            next[index] = { ...repeat, playbackRate: Number(event.target.value) };
-                            setRepeatSettings(next);
-                          }}
-                          className="accent-emerald-500"
-                        />
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>0.5x</span>
-                          <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
-                          <span>3x</span>
+                {repeatSettings.map((repeat, index) => {
+                  const isEnabled = repeat.enabled !== false;
+                  const nextPlayTime = nextPlayTimes[index];
+
+                  return (
+                    <tr key={index} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-base font-semibold text-emerald-200">Play {index + 1}</span>
+                          <span className="text-xs text-slate-500">Time until this play</span>
+                          <span className="text-xs text-slate-400">
+                            {isEnabled && nextPlayTime !== null ? `T+${nextPlayTime}s` : 'Disabled'}
+                          </span>
                         </div>
-                      </label>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-                        <span className="text-emerald-200 font-semibold">T+{nextPlayTimes[index]}s</span>
-                        <span className="text-slate-500">|</span>
-                        <span>{repeat.playbackRate.toFixed(1)}x</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs text-slate-400">Toggle play {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...repeatSettings];
+                              next[index] = { ...repeat, enabled: !isEnabled };
+                              setRepeatSettings(next);
+                            }}
+                            className={`w-full px-3 py-2 rounded-lg border text-sm font-semibold transition ${
+                              isEnabled
+                                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-100 hover:bg-emerald-500/30'
+                                : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
+                            }`}
+                          >
+                            {isEnabled ? 'On' : 'Off'}
+                          </button>
+                          <span className="text-xs text-slate-500">
+                            Disable this specific play without affecting others.
+                          </span>
+                        </label>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs text-slate-400">Gap in seconds until play {index + 1}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={repeat.gapSeconds}
+                            onChange={event => {
+                              const next = [...repeatSettings];
+                              next[index] = { ...repeat, gapSeconds: Number(event.target.value) };
+                              setRepeatSettings(next);
+                            }}
+                            disabled={!isEnabled}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </label>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <label className="flex flex-col gap-3">
+                          <span className="text-xs text-slate-400">Select speed</span>
+                          <input
+                            type="range"
+                            min={0.5}
+                            max={3}
+                            step={0.1}
+                            value={repeat.playbackRate}
+                            onChange={event => {
+                              const next = [...repeatSettings];
+                              next[index] = { ...repeat, playbackRate: Number(event.target.value) };
+                              setRepeatSettings(next);
+                            }}
+                            disabled={!isEnabled}
+                            className="accent-emerald-500 disabled:opacity-50"
+                          />
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>0.5x</span>
+                            <span className="text-emerald-200 text-sm font-semibold">{repeat.playbackRate.toFixed(1)}x</span>
+                            <span>3x</span>
+                          </div>
+                        </label>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                          {isEnabled && nextPlayTime !== null ? (
+                            <>
+                              <span className="text-emerald-200 font-semibold">T+{nextPlayTime}s</span>
+                              <span className="text-slate-500">|</span>
+                              <span>{repeat.playbackRate.toFixed(1)}x</span>
+                            </>
+                          ) : (
+                            <span className="text-slate-500">Disabled</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
             <p className="font-semibold text-emerald-200">Preview</p>
-            <p>The 6 scheduled plays will run at the predefined intervals for each play:</p>
+            <p>The 6 available plays will run at the predefined intervals. Disabled plays will be skipped:</p>
             <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-              {nextPlayTimes.map((seconds, index) => (
-                <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
-                  Play {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
-                </span>
-              ))}
+              {repeatSettings.map((repeat, index) => {
+                const isEnabled = repeat.enabled !== false;
+                const nextPlayTime = nextPlayTimes[index];
+
+                return (
+                  <span
+                    key={index}
+                    className={`px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80 ${
+                      !isEnabled ? 'opacity-60 line-through' : ''
+                    }`}
+                  >
+                    {isEnabled && nextPlayTime !== null
+                      ? `Play ${index + 1}: T+${nextPlayTime}s @ ${repeat.playbackRate.toFixed(1)}x`
+                      : `Play ${index + 1}: Disabled`}
+                  </span>
+                );
+              })}
             </div>
           </div>
 

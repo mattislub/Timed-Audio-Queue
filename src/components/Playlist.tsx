@@ -17,9 +17,11 @@ type PlaylistItem = Recording & {
   recordingId: string;
   expiresAt: number;
   errorMessage?: string;
+  slotNumber: number;
+  scheduledOffsetSeconds: number;
 };
 
-const TOTAL_PLAYS = 6;
+const MAX_PLAYS = 6;
 
 function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const [items, setItems] = useState<PlaylistItem[]>([]);
@@ -44,14 +46,19 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const playbackQueueRef = useRef<string[]>([]);
   const sanitizedRepeats = useMemo(() => {
     const normalized = settings.repeatSettings
-      .slice(0, TOTAL_PLAYS)
+      .slice(0, MAX_PLAYS)
       .map(repeat => ({
         gapSeconds: Math.max(0, repeat.gapSeconds),
         playbackRate: Math.min(3, Math.max(0.5, repeat.playbackRate)),
+        enabled: repeat.enabled !== false,
       }));
 
-    while (normalized.length < TOTAL_PLAYS) {
-      normalized.push({ gapSeconds: 30, playbackRate: 1 });
+    while (normalized.length < MAX_PLAYS) {
+      normalized.push({ gapSeconds: 30, playbackRate: 1, enabled: true });
+    }
+
+    if (!normalized.some(repeat => repeat.enabled)) {
+      normalized[0].enabled = true;
     }
 
     return normalized;
@@ -62,9 +69,28 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const scheduledOffsets = useMemo(() => {
     let total = 0;
     return sanitizedRepeats.map(repeat => {
+      if (!repeat.enabled) {
+        return null;
+      }
       total += repeat.gapSeconds;
       return total;
     });
+  }, [sanitizedRepeats]);
+
+  const activeRepeats = useMemo(() => {
+    let accumulatedMs = 0;
+    return sanitizedRepeats
+      .map((repeat, index) => ({ ...repeat, slotNumber: index + 1 }))
+      .filter(repeat => repeat.enabled)
+      .map((repeat, enabledIndex) => {
+        accumulatedMs += repeat.gapSeconds * 1000;
+        return {
+          ...repeat,
+          slotNumber: repeat.slotNumber,
+          playNumber: enabledIndex + 1,
+          scheduledOffsetMs: accumulatedMs,
+        };
+      });
   }, [sanitizedRepeats]);
 
   const enqueuePlayback = (id: string) => {
@@ -268,24 +294,22 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
       scheduledRecordingsRef.current.add(recording.id);
       const baseTime = getServerNow();
 
-      let accumulatedMs = 0;
-
-      sanitizedRepeats.forEach((repeat, index) => {
-        accumulatedMs += repeat.gapSeconds * 1000;
-        const playNumber = index + 1;
-        const playId = `${recording.id}-play-${playNumber}`;
-        const scheduledAt = baseTime + accumulatedMs;
+      activeRepeats.forEach(repeat => {
+        const playId = `${recording.id}-play-${repeat.slotNumber}`;
+        const scheduledAt = baseTime + repeat.scheduledOffsetMs;
         const delay = Math.max(0, scheduledAt - getServerNow());
 
         const newItem: PlaylistItem = {
           ...recording,
           id: playId,
           status: 'scheduled',
-          playNumber,
+          playNumber: repeat.playNumber,
+          slotNumber: repeat.slotNumber,
           scheduledAt,
           playbackRate: repeat.playbackRate,
           recordingId: recording.id,
           expiresAt: recording.createdAt + RECORDING_TTL_MS,
+          scheduledOffsetSeconds: Math.round(repeat.scheduledOffsetMs / 1000),
         };
 
         updateItems(prev => [...prev, newItem]);
@@ -302,7 +326,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
       attemptAutoplayUnlock();
     });
-  }, [attemptAutoplayUnlock, getServerNow, recordings, sanitizedRepeats]);
+  }, [activeRepeats, attemptAutoplayUnlock, getServerNow, recordings]);
 
   useEffect(() => {
     setCurrentTime(getServerNow());
@@ -376,6 +400,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   };
 
   const sortedItems = [...items].sort((a, b) => a.scheduledAt - b.scheduledAt || a.playNumber - b.playNumber);
+  const enabledPlayCount = Math.max(1, activeRepeats.length);
 
   return (
     <section className="space-y-6">
@@ -386,17 +411,25 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
         </div>
         <div className="flex flex-col gap-3 text-sm text-slate-200 md:items-end">
           <div className="flex flex-wrap gap-2 justify-end text-[11px]">
-            {sanitizedRepeats.map((repeat, index) => (
-              <span
-                key={index}
-                className="px-3 py-1 rounded-full border border-slate-700/80 bg-slate-950/60 text-emerald-100 shadow-inner shadow-emerald-900/30"
-              >
-                {index + 1}: T+{scheduledOffsets[index]}s @ {repeat.playbackRate.toFixed(2)}x
-              </span>
-            ))}
+            {sanitizedRepeats.map((repeat, index) => {
+              const offset = scheduledOffsets[index];
+              const isEnabled = repeat.enabled;
+              return (
+                <span
+                  key={index}
+                  className={`px-3 py-1 rounded-full border bg-slate-950/60 shadow-inner shadow-emerald-900/30 ${
+                    isEnabled ? 'border-slate-700/80 text-emerald-100' : 'border-slate-800 text-slate-500 line-through'
+                  }`}
+                >
+                  {isEnabled && offset !== null
+                    ? `Play ${index + 1}: T+${offset}s @ ${repeat.playbackRate.toFixed(2)}x`
+                    : `Play ${index + 1}: Disabled`}
+                </span>
+              );
+            })}
           </div>
           <div className="px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-100">
-            {TOTAL_PLAYS} plays per file
+            {enabledPlayCount} plays enabled{enabledPlayCount < MAX_PLAYS ? ` (skipping ${MAX_PLAYS - enabledPlayCount})` : ''}
           </div>
         </div>
       </div>
@@ -419,9 +452,10 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                 </div>
                 <div className="flex flex-col items-end gap-2 text-xs text-slate-200 text-right">
                   <span className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/70 border border-slate-700 shadow-inner shadow-slate-900">
-                    <Play className="w-4 h-4" /> {item.playNumber}/{TOTAL_PLAYS}
+                    <Play className="w-4 h-4" /> {item.playNumber}/{enabledPlayCount || 1}
                   </span>
                   <span className="text-[12px] font-semibold text-emerald-300">{renderCountdown(item.scheduledAt)}</span>
+                  <span className="text-[11px] text-slate-500">Slot {item.slotNumber}</span>
                   <span className="text-[11px] text-slate-500">{new Date(item.scheduledAt).toLocaleTimeString()}</span>
                 </div>
               </div>
@@ -483,7 +517,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>T+{scheduledOffsets[item.playNumber - 1]}s</span>
+                <span>T+{item.scheduledOffsetSeconds}s</span>
                 <span>{item.playbackRate.toFixed(2)}x</span>
               </div>
 

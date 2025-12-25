@@ -193,6 +193,7 @@ async function convertWebmToPlayable(blob: Blob) {
 async function createSoundRecord(fileName: string, publicUrl: string, playbackRates: number[]) {
   const requestUrl = buildApiUrl('/sounds');
   console.info('[Recorder] Creating sound record', { requestUrl, fileName });
+  const totalPlays = Math.max(1, playbackRates.length);
 
   const response = await fetch(requestUrl, {
     method: 'POST',
@@ -201,7 +202,7 @@ async function createSoundRecord(fileName: string, publicUrl: string, playbackRa
       file_name: fileName,
       file_url: publicUrl,
       plays_completed: 0,
-      total_plays: 6,
+      total_plays: totalPlays,
       is_playing: 0,
       next_play_at: new Date().toISOString(),
       playback_speeds: playbackRates,
@@ -362,7 +363,9 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         try {
           setIsUploading(true);
           const publicUrl = await uploadRecording(finalBlob, fileName);
-          const playbackRates = settings.repeatSettings.map(repeat => repeat.playbackRate);
+          const enabledRepeats = settings.repeatSettings.filter(repeat => repeat.enabled !== false);
+          const effectiveRepeats = enabledRepeats.length > 0 ? enabledRepeats : settings.repeatSettings;
+          const playbackRates = effectiveRepeats.map(repeat => repeat.playbackRate);
           await createSoundRecord(fileName, publicUrl, playbackRates);
           onRecordingSaved();
         } catch (uploadError) {
