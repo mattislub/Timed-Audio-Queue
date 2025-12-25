@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Clock3, Play } from 'lucide-react';
 import type { AppSettings, Recording } from '../App';
 import { RECORDING_TTL_MS } from '../constants';
-import { getEffectiveRepeats, sanitizeRepeatSettings } from '../utils/repeats';
 
 type PlaylistProps = {
   recordings: Recording[];
@@ -19,6 +18,8 @@ type PlaylistItem = Recording & {
   expiresAt: number;
   errorMessage?: string;
 };
+
+const TOTAL_PLAYS = 6;
 
 function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const [items, setItems] = useState<PlaylistItem[]>([]);
@@ -41,25 +42,30 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   };
   const getItem = (id: string) => itemsRef.current.find(item => item.id === id);
   const playbackQueueRef = useRef<string[]>([]);
-  const sanitizedRepeats = useMemo(
-    () => sanitizeRepeatSettings(settings.repeatSettings),
-    [settings.repeatSettings],
-  );
-  const effectiveRepeats = useMemo(
-    () => getEffectiveRepeats({ repeatEnabled: settings.repeatEnabled, repeatSettings: sanitizedRepeats }),
-    [sanitizedRepeats, settings.repeatEnabled],
-  );
-  const totalPlays = effectiveRepeats.length;
+  const sanitizedRepeats = useMemo(() => {
+    const normalized = settings.repeatSettings
+      .slice(0, TOTAL_PLAYS)
+      .map(repeat => ({
+        gapSeconds: Math.max(0, repeat.gapSeconds),
+        playbackRate: Math.min(3, Math.max(0.5, repeat.playbackRate)),
+      }));
 
-  const scheduleKey = JSON.stringify({ repeatEnabled: settings.repeatEnabled, repeats: sanitizedRepeats });
+    while (normalized.length < TOTAL_PLAYS) {
+      normalized.push({ gapSeconds: 30, playbackRate: 1 });
+    }
+
+    return normalized;
+  }, [settings.repeatSettings]);
+
+  const scheduleKey = JSON.stringify(sanitizedRepeats);
   const previousScheduleKeyRef = useRef<string>(scheduleKey);
   const scheduledOffsets = useMemo(() => {
     let total = 0;
-    return effectiveRepeats.map(repeat => {
+    return sanitizedRepeats.map(repeat => {
       total += repeat.gapSeconds;
       return total;
     });
-  }, [effectiveRepeats]);
+  }, [sanitizedRepeats]);
 
   const enqueuePlayback = (id: string) => {
     if (playbackQueueRef.current.includes(id)) return;
@@ -264,7 +270,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
       let accumulatedMs = 0;
 
-      effectiveRepeats.forEach((repeat, index) => {
+      sanitizedRepeats.forEach((repeat, index) => {
         accumulatedMs += repeat.gapSeconds * 1000;
         const playNumber = index + 1;
         const playId = `${recording.id}-play-${playNumber}`;
@@ -296,7 +302,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
       attemptAutoplayUnlock();
     });
-  }, [attemptAutoplayUnlock, effectiveRepeats, getServerNow, recordings, sanitizedRepeats]);
+  }, [attemptAutoplayUnlock, getServerNow, recordings, sanitizedRepeats]);
 
   useEffect(() => {
     setCurrentTime(getServerNow());
@@ -380,7 +386,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
         </div>
         <div className="flex flex-col gap-3 text-sm text-slate-200 md:items-end">
           <div className="flex flex-wrap gap-2 justify-end text-[11px]">
-            {effectiveRepeats.map((repeat, index) => (
+            {sanitizedRepeats.map((repeat, index) => (
               <span
                 key={index}
                 className="px-3 py-1 rounded-full border border-slate-700/80 bg-slate-950/60 text-emerald-100 shadow-inner shadow-emerald-900/30"
@@ -390,7 +396,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
             ))}
           </div>
           <div className="px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-100">
-            {totalPlays} play{totalPlays === 1 ? '' : 's'} per file
+            {TOTAL_PLAYS} plays per file
           </div>
         </div>
       </div>
@@ -413,7 +419,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
                 </div>
                 <div className="flex flex-col items-end gap-2 text-xs text-slate-200 text-right">
                   <span className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/70 border border-slate-700 shadow-inner shadow-slate-900">
-                    <Play className="w-4 h-4" /> {item.playNumber}/{totalPlays}
+                    <Play className="w-4 h-4" /> {item.playNumber}/{TOTAL_PLAYS}
                   </span>
                   <span className="text-[12px] font-semibold text-emerald-300">{renderCountdown(item.scheduledAt)}</span>
                   <span className="text-[11px] text-slate-500">{new Date(item.scheduledAt).toLocaleTimeString()}</span>
