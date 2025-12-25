@@ -18,6 +18,7 @@ export type RepeatSetting = {
 };
 
 export type AppSettings = {
+  repeatEnabled: boolean;
   repeatSettings: RepeatSetting[];
 };
 
@@ -332,6 +333,7 @@ function App() {
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [activePage, setActivePage] = useState<'record' | 'playlist' | 'settings'>('record');
   const [settings, setSettings] = useState<AppSettings>({
+    repeatEnabled: true,
     repeatSettings: [
       { gapSeconds: 0, playbackRate: 1 },
       { gapSeconds: 2, playbackRate: 1 },

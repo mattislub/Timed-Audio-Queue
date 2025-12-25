@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Mic, StopCircle } from 'lucide-react';
 import type { AppSettings } from '../App';
+import { getEffectiveRepeats, sanitizeRepeatSettings } from '../utils/repeats';
 
 const NON_WEBM_TYPES = ['audio/mpeg', 'audio/ogg', 'audio/aac', 'audio/wav'];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -190,7 +191,7 @@ async function convertWebmToPlayable(blob: Blob) {
   return { blob: new Blob([wavBuffer], { type: 'audio/wav' }), extension: 'wav' };
 }
 
-async function createSoundRecord(fileName: string, publicUrl: string, playbackRates: number[]) {
+async function createSoundRecord(fileName: string, publicUrl: string, playbackRates: number[], totalPlays: number) {
   const requestUrl = buildApiUrl('/sounds');
   console.info('[Recorder] Creating sound record', { requestUrl, fileName });
 
@@ -201,7 +202,7 @@ async function createSoundRecord(fileName: string, publicUrl: string, playbackRa
       file_name: fileName,
       file_url: publicUrl,
       plays_completed: 0,
-      total_plays: 6,
+      total_plays: totalPlays,
       is_playing: 0,
       next_play_at: new Date().toISOString(),
       playback_speeds: playbackRates,
@@ -227,6 +228,14 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const sanitizedRepeats = useMemo(
+    () => sanitizeRepeatSettings(settings.repeatSettings),
+    [settings.repeatSettings],
+  );
+  const effectiveRepeats = useMemo(
+    () => getEffectiveRepeats({ repeatEnabled: settings.repeatEnabled, repeatSettings: sanitizedRepeats }),
+    [sanitizedRepeats, settings.repeatEnabled],
+  );
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const visualizerFrameRef = useRef<number | null>(null);
 
@@ -362,8 +371,8 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         try {
           setIsUploading(true);
           const publicUrl = await uploadRecording(finalBlob, fileName);
-          const playbackRates = settings.repeatSettings.map(repeat => repeat.playbackRate);
-          await createSoundRecord(fileName, publicUrl, playbackRates);
+          const playbackRates = effectiveRepeats.map(repeat => repeat.playbackRate);
+          await createSoundRecord(fileName, publicUrl, playbackRates, effectiveRepeats.length);
           onRecordingSaved();
         } catch (uploadError) {
           console.error('Upload failed', uploadError);
@@ -388,7 +397,7 @@ function Recorder({ onRecordingSaved, settings }: RecorderProps) {
         message: 'Check microphone permissions and try again. We will convert automatically if WebM is recorded.',
       });
     }
-  }, [onRecordingSaved, preferredMimeType, selectedMimeType, settings.repeatSettings, startVisualizer]);
+  }, [effectiveRepeats, onRecordingSaved, preferredMimeType, selectedMimeType, startVisualizer]);
 
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;

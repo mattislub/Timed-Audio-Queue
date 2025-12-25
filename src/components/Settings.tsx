@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { AppSettings, RecorderUser, RepeatSetting } from '../App';
+import { MAX_REPEAT_PLAYS, getEffectiveRepeats, sanitizeRepeatSettings } from '../utils/repeats';
 
 type SettingsProps = {
   settings: AppSettings;
@@ -12,6 +13,7 @@ type SettingsProps = {
 
 function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, recorderUsers, onRecorderUsersChange }: SettingsProps) {
   const [repeatSettings, setRepeatSettings] = useState<RepeatSetting[]>(settings.repeatSettings);
+  const [repeatEnabled, setRepeatEnabled] = useState<boolean>(settings.repeatEnabled);
   const [activeTab, setActiveTab] = useState<'playback' | 'auth'>('playback');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
@@ -23,20 +25,19 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
 
   useEffect(() => {
     setRepeatSettings(settings.repeatSettings);
-  }, [settings.repeatSettings]);
+    setRepeatEnabled(settings.repeatEnabled);
+  }, [settings.repeatEnabled, settings.repeatSettings]);
+
+  const sanitizedRepeats = useMemo(() => sanitizeRepeatSettings(repeatSettings), [repeatSettings]);
+  const effectiveRepeats = useMemo(
+    () => getEffectiveRepeats({ repeatEnabled, repeatSettings: sanitizedRepeats }),
+    [repeatEnabled, sanitizedRepeats],
+  );
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const sanitizedRepeats: RepeatSetting[] = repeatSettings.slice(0, 6).map(repeat => ({
-      gapSeconds: Math.max(0, Math.round(repeat.gapSeconds)),
-      playbackRate: Math.min(3, Math.max(0.5, Number(repeat.playbackRate.toFixed(2)))),
-    }));
 
-    while (sanitizedRepeats.length < 6) {
-      sanitizedRepeats.push({ gapSeconds: 30, playbackRate: 1 });
-    }
-
-    onChange({ repeatSettings: sanitizedRepeats });
+    onChange({ repeatEnabled, repeatSettings: sanitizedRepeats });
   };
 
   const generatePassword = () => Math.random().toString(36).slice(-10);
@@ -118,12 +119,12 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
   const nextPlayTimes = useMemo(() => {
     const times: number[] = [];
     let total = 0;
-    repeatSettings.forEach((repeat, index) => {
+    sanitizedRepeats.forEach((repeat, index) => {
       total += Math.max(0, repeat.gapSeconds);
       times[index] = total;
     });
     return times;
-  }, [repeatSettings]);
+  }, [sanitizedRepeats]);
 
   return (
     <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
@@ -161,6 +162,27 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
 
       {activeTab === 'playback' && (
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="flex items-start justify-between gap-4 bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="space-y-1 text-sm text-slate-300">
+              <p className="text-emerald-200 font-semibold text-xs uppercase tracking-[0.1em]">Repeats</p>
+              <p className="text-base font-semibold text-white">Enable multiple plays</p>
+              <p className="text-xs text-slate-400">
+                Turn off to play each recording only once. When off, only the first play is scheduled.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={repeatEnabled}
+                onChange={event => setRepeatEnabled(event.target.checked)}
+              />
+              <div className="w-14 h-8 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:bg-emerald-500 transition-colors">
+                <div className="absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow transition-all peer-checked:translate-x-6" />
+              </div>
+            </label>
+          </div>
+
           <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/40 shadow-inner">
             <table className="min-w-full text-sm text-slate-300">
               <thead className="bg-slate-800/70 text-slate-100 text-xs uppercase tracking-wider">
@@ -243,11 +265,15 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
 
           <div className="bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 space-y-2">
             <p className="font-semibold text-emerald-200">Preview</p>
-            <p>The 6 scheduled plays will run at the predefined intervals for each play:</p>
+            <p>
+              {repeatEnabled
+                ? `Up to ${MAX_REPEAT_PLAYS} plays will run at the configured intervals.`
+                : 'Repeats are off. Only the first play will be scheduled.'}
+            </p>
             <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-              {nextPlayTimes.map((seconds, index) => (
+              {effectiveRepeats.map((repeat, index) => (
                 <span key={index} className="px-3 py-1 rounded-full border border-slate-700 bg-slate-900/80">
-                  Play {index + 1}: T+{seconds}s @ {repeatSettings[index].playbackRate.toFixed(1)}x
+                  Play {index + 1}: T+{nextPlayTimes[index]}s @ {repeat.playbackRate.toFixed(1)}x
                 </span>
               ))}
             </div>
