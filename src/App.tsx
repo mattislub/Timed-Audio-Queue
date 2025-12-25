@@ -15,6 +15,7 @@ export type Recording = {
 export type RepeatSetting = {
   gapSeconds: number;
   playbackRate: number;
+  enabled?: boolean;
 };
 
 export type AppSettings = {
@@ -333,12 +334,12 @@ function App() {
   const [activePage, setActivePage] = useState<'record' | 'playlist' | 'settings'>('record');
   const [settings, setSettings] = useState<AppSettings>({
     repeatSettings: [
-      { gapSeconds: 0, playbackRate: 1 },
-      { gapSeconds: 2, playbackRate: 1 },
-      { gapSeconds: 30, playbackRate: 1 },
-      { gapSeconds: 30, playbackRate: 1 },
-      { gapSeconds: 30, playbackRate: 1 },
-      { gapSeconds: 30, playbackRate: 1 },
+      { gapSeconds: 0, playbackRate: 1, enabled: true },
+      { gapSeconds: 2, playbackRate: 1, enabled: true },
+      { gapSeconds: 30, playbackRate: 1, enabled: true },
+      { gapSeconds: 30, playbackRate: 1, enabled: true },
+      { gapSeconds: 30, playbackRate: 1, enabled: true },
+      { gapSeconds: 30, playbackRate: 1, enabled: true },
     ],
   });
   const [adminPassword, setAdminPassword] = useState<string>(defaultAuthState.adminPassword);
