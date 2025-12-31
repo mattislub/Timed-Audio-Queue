@@ -20,7 +20,6 @@ export type RepeatSetting = {
 
 export type AppSettings = {
   repeatSettings: RepeatSetting[];
-  preventOverlappingPlayback: boolean;
 };
 
 export type RecorderUser = {
@@ -342,7 +341,6 @@ function App() {
       { gapSeconds: 30, playbackRate: 1, enabled: true },
       { gapSeconds: 30, playbackRate: 1, enabled: true },
     ],
-    preventOverlappingPlayback: true,
   });
   const [adminPassword, setAdminPassword] = useState<string>(defaultAuthState.adminPassword);
   const [recorderUsers, setRecorderUsers] = useState<RecorderUser[]>(defaultAuthState.recorderUsers);

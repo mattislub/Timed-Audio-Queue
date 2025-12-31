@@ -12,7 +12,6 @@ type SettingsProps = {
 
 function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, recorderUsers, onRecorderUsersChange }: SettingsProps) {
   const [repeatSettings, setRepeatSettings] = useState<RepeatSetting[]>(settings.repeatSettings);
-  const [preventOverlappingPlayback, setPreventOverlappingPlayback] = useState<boolean>(settings.preventOverlappingPlayback);
   const [activeTab, setActiveTab] = useState<'playback' | 'auth'>('playback');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
@@ -24,8 +23,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
 
   useEffect(() => {
     setRepeatSettings(settings.repeatSettings);
-    setPreventOverlappingPlayback(settings.preventOverlappingPlayback);
-  }, [settings.preventOverlappingPlayback, settings.repeatSettings]);
+  }, [settings.repeatSettings]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -43,7 +41,7 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
       sanitizedRepeats[0].enabled = true;
     }
 
-    onChange({ repeatSettings: sanitizedRepeats, preventOverlappingPlayback });
+    onChange({ repeatSettings: sanitizedRepeats });
   };
 
   const generatePassword = () => Math.random().toString(36).slice(-10);
@@ -317,26 +315,6 @@ function Settings({ settings, onChange, adminPassword, onAdminPasswordChange, re
                 );
               })}
             </div>
-          </div>
-
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-800/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-300">
-            <div className="space-y-1">
-              <p className="font-semibold text-emerald-200">Prevent overlapping playback</p>
-              <p className="text-slate-400">
-                When enabled, only one recording will ever play at a time. Additional plays wait in the queue until the current one finishes.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPreventOverlappingPlayback(prev => !prev)}
-              className={`min-w-[140px] px-4 py-2 rounded-lg border text-sm font-semibold transition ${
-                preventOverlappingPlayback
-                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-100 hover:bg-emerald-500/30'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
-              }`}
-            >
-              {preventOverlappingPlayback ? 'Enabled' : 'Disabled'}
-            </button>
           </div>
 
           <div className="flex justify-end">

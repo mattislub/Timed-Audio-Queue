@@ -224,7 +224,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const playWhenAvailable = (id: string, manualTrigger = false) => {
     const currentlyPlayingId = getCurrentlyPlayingId();
 
-    if (settings.preventOverlappingPlayback && currentlyPlayingId && currentlyPlayingId !== id) {
+    if (currentlyPlayingId && currentlyPlayingId !== id) {
       updateItems(prev =>
         prev.map(item => (item.id === id ? { ...item, status: 'queued', errorMessage: undefined } : item)),
       );
@@ -244,18 +244,10 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   };
 
   useEffect(() => {
-    if (settings.preventOverlappingPlayback && !getCurrentlyPlayingId() && playbackQueueRef.current.length > 0) {
+    if (!getCurrentlyPlayingId() && playbackQueueRef.current.length > 0) {
       startNextInQueue();
     }
-  }, [items, settings.preventOverlappingPlayback]);
-
-  useEffect(() => {
-    if (!settings.preventOverlappingPlayback && playbackQueueRef.current.length > 0) {
-      const queued = [...playbackQueueRef.current];
-      playbackQueueRef.current = [];
-      queued.forEach(id => playWhenAvailable(id, true));
-    }
-  }, [playWhenAvailable, settings.preventOverlappingPlayback]);
+  }, [items]);
 
   const retryPendingAutoplay = useCallback(() => {
     const pending = Array.from(pendingAutoplayRef.current);
