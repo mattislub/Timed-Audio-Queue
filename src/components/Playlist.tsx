@@ -104,6 +104,31 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     playbackQueueRef.current = playbackQueueRef.current.filter(queuedId => queuedId !== id);
   };
 
+  const stopOtherPlaybacks = (currentId: string) => {
+    const stoppedIds = new Set<string>();
+
+    Object.entries(audiosRef.current).forEach(([id, audio]) => {
+      if (id !== currentId && audio) {
+        audio.pause();
+        audio.currentTime = 0;
+        audiosRef.current[id] = null;
+        stoppedIds.add(id);
+      }
+    });
+
+    if (stoppedIds.size === 0) return;
+
+    updateItems(prev =>
+      prev.map(item =>
+        stoppedIds.has(item.id)
+          ? { ...item, status: 'queued', errorMessage: undefined }
+          : item,
+      ),
+    );
+
+    stoppedIds.forEach(enqueuePlayback);
+  };
+
   const getCurrentlyPlayingId = () => itemsRef.current.find(item => item.status === 'playing')?.id;
 
   const removeItem = (id: string) => {
@@ -160,8 +185,10 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     audio.currentTime = 0;
     audio.playbackRate = currentItem.playbackRate;
     audiosRef.current[id] = audio;
+    audio.onplay = () => stopOtherPlaybacks(id);
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
+    stopOtherPlaybacks(id);
 
     const handleError = (message: string, shouldQueueAutoplay = false, shouldRetry = false) => {
       audiosRef.current[id] = null;
