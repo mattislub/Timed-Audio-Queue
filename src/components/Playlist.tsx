@@ -32,6 +32,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
   const audiosRef = useRef<Record<string, HTMLAudioElement | null>>({});
   const itemsRef = useRef<PlaylistItem[]>([]);
   const scheduledRecordingsRef = useRef<Set<string>>(new Set());
+  const startingPlaybackRef = useRef<string | null>(null);
   const pendingAutoplayRef = useRef<Set<string>>(new Set());
   const autoplayUnlockedRef = useRef(false);
 
@@ -144,6 +145,9 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
     const audio = audiosRef.current[id];
     audio?.pause();
+    if (startingPlaybackRef.current === id) {
+      startingPlaybackRef.current = null;
+    }
     delete timersRef.current[id];
     delete retryTimersRef.current[id];
     delete audiosRef.current[id];
@@ -185,13 +189,21 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
     audio.currentTime = 0;
     audio.playbackRate = currentItem.playbackRate;
     audiosRef.current[id] = audio;
-    audio.onplay = () => stopOtherPlaybacks(id);
+    audio.onplay = () => {
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
+      stopOtherPlaybacks(id);
+    };
 
     updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'playing', errorMessage: undefined } : item)));
     stopOtherPlaybacks(id);
 
     const handleError = (message: string, shouldQueueAutoplay = false, shouldRetry = false) => {
       audiosRef.current[id] = null;
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
       updateItems(prev =>
         prev.map(item =>
           item.id === id
@@ -219,17 +231,31 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
     audio.onended = () => {
       audiosRef.current[id] = null;
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
       updateItems(prev => prev.map(item => (item.id === id ? { ...item, status: 'done' } : item)));
       removeItem(id);
       startNextInQueue();
     };
 
-    audio.onerror = () => handleError('Playback failed. Check that the file exists and is supported.');
+    audio.onerror = () => {
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
+      handleError('Playback failed. Check that the file exists and is supported.');
+    };
 
     try {
       await audio.play();
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
     } catch (error) {
       console.error('Playback error', error);
+      if (startingPlaybackRef.current === id) {
+        startingPlaybackRef.current = null;
+      }
       handleError(
         manualTrigger
           ? 'Playback failed. Please try again.'
@@ -250,8 +276,9 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
 
   const playWhenAvailable = (id: string, manualTrigger = false) => {
     const currentlyPlayingId = getCurrentlyPlayingId();
+    const startingPlaybackId = startingPlaybackRef.current;
 
-    if (currentlyPlayingId && currentlyPlayingId !== id) {
+    if ((currentlyPlayingId && currentlyPlayingId !== id) || (startingPlaybackId && startingPlaybackId !== id)) {
       updateItems(prev =>
         prev.map(item => (item.id === id ? { ...item, status: 'queued', errorMessage: undefined } : item)),
       );
@@ -259,6 +286,7 @@ function Playlist({ recordings, settings, serverOffsetMs }: PlaylistProps) {
       return;
     }
 
+    startingPlaybackRef.current = id;
     removeFromQueue(id);
     playOnce(id, manualTrigger);
   };
